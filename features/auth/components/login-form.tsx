@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Loader2, LogIn } from "lucide-react";
 
 import { Alert } from "@/components/ui/alert";
@@ -24,19 +23,16 @@ function resolveErrorMessage(message: string) {
   return message;
 }
 
-export function LoginForm() {
-  const searchParams = useSearchParams();
+type LoginFormProps = {
+  nextPath?: string;
+  registered?: boolean;
+};
+
+export function LoginForm({ nextPath = "/dashboard", registered = false }: LoginFormProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
-  const nextPath = useMemo(() => {
-    const candidate = searchParams.get("next");
-    return candidate && candidate.startsWith("/") ? candidate : "/dashboard";
-  }, [searchParams]);
-
-  const registered = searchParams.get("registered") === "1";
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();

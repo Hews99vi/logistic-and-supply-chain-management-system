@@ -1,15 +1,26 @@
-import { Suspense } from "react";
-
 import { LoginForm } from "@/features/auth/components/login-form";
 
-function LoginPageFallback() {
-  return null;
+type LoginPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function normalizeNextPath(value: string | string[] | undefined) {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  return candidate && candidate.startsWith("/") ? candidate : "/dashboard";
 }
 
-export default function LoginPage() {
+function normalizeRegistered(value: string | string[] | undefined) {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  return candidate === "1";
+}
+
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+
   return (
-    <Suspense fallback={<LoginPageFallback />}>
-      <LoginForm />
-    </Suspense>
+    <LoginForm
+      nextPath={normalizeNextPath(resolvedSearchParams.next)}
+      registered={normalizeRegistered(resolvedSearchParams.registered)}
+    />
   );
 }
