@@ -23,7 +23,7 @@ export function SummaryWidgets({ bundle, loading }: SummaryWidgetsProps) {
 
   return (
     <section className="grid gap-4 lg:grid-cols-2">
-      <Card>
+      <Card className="overflow-hidden">
         <CardHeader className="pb-3">
           <CardTitle>Top Products by Sales Qty</CardTitle>
           <CardDescription>Based on current filter window</CardDescription>
@@ -37,13 +37,15 @@ export function SummaryWidgets({ bundle, loading }: SummaryWidgetsProps) {
             </p>
           ) : (
             topProducts.map((item, index) => (
-              <div key={item.productId} className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 px-3 py-3 sm:px-4">
-                <div className="min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">#{index + 1} Product</p>
-                  <p className="mt-1 truncate font-semibold text-slate-900">{item.productName}</p>
-                  <p className="text-xs text-slate-500">{item.productCode}</p>
+              <div key={item.productId} className="rounded-xl border border-slate-100 px-3 py-3 sm:px-4">
+                <div className="space-y-2 sm:flex sm:items-start sm:justify-between sm:gap-3 sm:space-y-0">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">#{index + 1} Product</p>
+                    <p className="mt-1 break-words text-base font-semibold leading-6 text-slate-900 sm:text-lg">{item.productName}</p>
+                    <p className="text-xs text-slate-500">{item.productCode}</p>
+                  </div>
+                  <p className="shrink-0 text-sm font-semibold text-slate-800 sm:text-right">{item.totalSalesQty} units</p>
                 </div>
-                <p className="shrink-0 text-right font-semibold text-slate-800">{item.totalSalesQty} units</p>
               </div>
             ))
           )}
@@ -66,15 +68,15 @@ export function SummaryWidgets({ bundle, loading }: SummaryWidgetsProps) {
             <>
               <div className="rounded-xl border border-slate-100 px-4 py-3">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Cash</p>
-                <p className="mt-1 text-lg font-semibold text-slate-900">{formatCurrencyLkr(paymentTotals.totalCash)}</p>
+                <p className="mt-1 break-words text-lg font-semibold text-slate-900">{formatCurrencyLkr(paymentTotals.totalCash)}</p>
               </div>
               <div className="rounded-xl border border-slate-100 px-4 py-3">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Cheques</p>
-                <p className="mt-1 text-lg font-semibold text-slate-900">{formatCurrencyLkr(paymentTotals.totalCheques)}</p>
+                <p className="mt-1 break-words text-lg font-semibold text-slate-900">{formatCurrencyLkr(paymentTotals.totalCheques)}</p>
               </div>
               <div className="rounded-xl border border-slate-100 px-4 py-3">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Credit</p>
-                <p className="mt-1 text-lg font-semibold text-slate-900">{formatCurrencyLkr(paymentTotals.totalCredit)}</p>
+                <p className="mt-1 break-words text-lg font-semibold text-slate-900">{formatCurrencyLkr(paymentTotals.totalCredit)}</p>
               </div>
             </>
           )}

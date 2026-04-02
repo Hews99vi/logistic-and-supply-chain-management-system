@@ -18,6 +18,14 @@ type RouteSaturationWidgetProps = {
   loading?: boolean;
 };
 
+function formatCurrencyLkr(amount: number) {
+  return new Intl.NumberFormat("en-LK", {
+    style: "currency",
+    currency: "LKR",
+    maximumFractionDigits: 0
+  }).format(amount);
+}
+
 export function RouteSaturationWidget({ items, loading }: RouteSaturationWidgetProps) {
   const chartData = items.slice(0, 6).map((item) => ({
     name: item.routeName,
@@ -26,7 +34,7 @@ export function RouteSaturationWidget({ items, loading }: RouteSaturationWidgetP
   }));
 
   return (
-    <Card>
+    <Card className="overflow-hidden">
       <CardHeader className="pb-3">
         <CardTitle>Route Saturation</CardTitle>
         <CardDescription>Sales and profit concentration across top routes</CardDescription>
@@ -40,9 +48,9 @@ export function RouteSaturationWidget({ items, loading }: RouteSaturationWidgetP
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="h-48 sm:h-56">
+            <div className="hidden h-56 sm:block">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -24, bottom: 0 }}>
+                <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
                   <defs>
                     <linearGradient id="salesFill" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#2563eb" stopOpacity={0.5} />
@@ -64,16 +72,18 @@ export function RouteSaturationWidget({ items, loading }: RouteSaturationWidgetP
             </div>
 
             <div className="grid gap-2 sm:hidden">
-              {chartData.slice(0, 3).map((item) => (
-                <div key={item.name} className="rounded-xl border border-slate-100 px-3 py-2.5 text-sm">
-                  <p className="font-semibold text-slate-900">{item.name}</p>
-                  <div className="mt-1 flex items-center justify-between gap-3 text-slate-600">
-                    <span>Sales</span>
-                    <span className="font-semibold text-slate-900">{item.sales.toLocaleString("en-LK")}</span>
-                  </div>
-                  <div className="mt-1 flex items-center justify-between gap-3 text-slate-600">
-                    <span>Net Profit</span>
-                    <span className="font-semibold text-slate-900">{item.netProfit.toLocaleString("en-LK")}</span>
+              {chartData.slice(0, 4).map((item) => (
+                <div key={item.name} className="rounded-xl border border-slate-100 px-3 py-3 text-sm">
+                  <p className="break-words font-semibold leading-6 text-slate-900">{item.name}</p>
+                  <div className="mt-2 grid gap-2">
+                    <div className="rounded-lg bg-slate-50 px-3 py-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Sales</p>
+                      <p className="mt-1 font-semibold text-slate-900">{formatCurrencyLkr(item.sales)}</p>
+                    </div>
+                    <div className="rounded-lg bg-slate-50 px-3 py-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Net Profit</p>
+                      <p className="mt-1 font-semibold text-slate-900">{formatCurrencyLkr(item.netProfit)}</p>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -84,3 +94,4 @@ export function RouteSaturationWidget({ items, loading }: RouteSaturationWidgetP
     </Card>
   );
 }
+

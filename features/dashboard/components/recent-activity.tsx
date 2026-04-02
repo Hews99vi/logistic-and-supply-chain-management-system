@@ -27,7 +27,7 @@ function toneIcon(tone: ActivityItem["statusTone"]) {
 
 export function RecentActivity({ items, loading }: RecentActivityProps) {
   return (
-    <Card className="h-full">
+    <Card className="h-full overflow-hidden">
       <CardHeader className="pb-4">
         <CardTitle>Recent Activity</CardTitle>
         <CardDescription>Real-time logistics and sales updates</CardDescription>
@@ -51,20 +51,20 @@ export function RecentActivity({ items, loading }: RecentActivityProps) {
 
                 return (
                   <article key={item.id} className="space-y-3 rounded-xl border border-slate-100 p-4">
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-3">
                       <div className="min-w-0">
-                        <p className="font-semibold text-slate-900">{item.routeOrDepot}</p>
-                        {item.meta ? <p className="mt-1 text-xs text-slate-500">{item.meta}</p> : null}
+                        <p className="break-words text-base font-semibold leading-7 text-slate-900">{item.routeOrDepot}</p>
+                        {item.meta ? <p className="mt-1 break-words text-xs text-slate-500">{item.meta}</p> : null}
                       </div>
-                      <Badge variant={toneToBadgeVariant(item.statusTone)} className="shrink-0 inline-flex gap-1">
-                        <ToneIcon className="h-3.5 w-3.5" />
-                        {item.statusLabel}
+                      <Badge variant={toneToBadgeVariant(item.statusTone)} className="inline-flex max-w-full gap-1 self-start whitespace-normal break-words px-3 py-1 text-xs">
+                        <ToneIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                        <span className="break-words">{item.statusLabel}</span>
                       </Badge>
                     </div>
 
                     <div className="space-y-1">
-                      <p className="text-sm text-slate-700">{item.activity}</p>
-                      <p className="text-lg font-semibold text-slate-900">{item.value}</p>
+                      <p className="break-words text-sm leading-6 text-slate-700">{item.activity}</p>
+                      <p className="break-words text-lg font-semibold text-slate-900">{item.value}</p>
                     </div>
                   </article>
                 );
@@ -121,7 +121,7 @@ export function AiInsightCard({ content, canGenerate }: { content: string; canGe
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4 text-sm text-blue-100">
-        <p className="leading-6">{content}</p>
+        <p className="break-words leading-6">{content}</p>
         <button
           type="button"
           disabled={!canGenerate}
