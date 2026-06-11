@@ -2,14 +2,14 @@ import { z } from "zod";
 
 import { uuidSchema } from "@/lib/validation/common";
 
-const packQuantitySchema = z.number().int().min(0);
+const unitQuantitySchema = z.number().int().min(0);
 
 export const loadingSummaryItemSchema = z.object({
   id: uuidSchema.optional(),
   productId: uuidSchema,
-  loadingQty: packQuantitySchema,
-  salesQty: packQuantitySchema,
-  lorryQty: packQuantitySchema
+  loadingQty: unitQuantitySchema,
+  salesQty: unitQuantitySchema,
+  lorryQty: unitQuantitySchema
 }).superRefine((value, ctx) => {
   if (value.salesQty > value.loadingQty) {
     ctx.addIssue({
@@ -53,4 +53,3 @@ export const loadingSummaryItemBatchSaveSchema = z.object({
 
 export type LoadingSummaryItemInput = z.infer<typeof loadingSummaryItemSchema>;
 export type LoadingSummaryItemBatchSaveInput = z.infer<typeof loadingSummaryItemBatchSaveSchema>;
-

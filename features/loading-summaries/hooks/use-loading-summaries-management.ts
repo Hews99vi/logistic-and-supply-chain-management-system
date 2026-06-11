@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   createLoadingSummary,
+  deleteLoadingSummary,
   fetchAuthSession,
   fetchLoadingSummaries,
   fetchRouteFilterOptions,
@@ -61,6 +62,7 @@ export function useLoadingSummariesManagement() {
   const [formError, setFormError] = useState<string | null>(null);
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [finalizingId, setFinalizingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -259,6 +261,26 @@ export function useLoadingSummariesManagement() {
     }
   }, [canFinalize, filters, loadData]);
 
+  const deleteSummary = useCallback(async (item: LoadingSummaryListItem) => {
+    if (item.status !== "draft" || !canCreate) return false;
+
+    setDeletingId(item.id);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      await deleteLoadingSummary(item.id);
+      setSuccessMessage("Loading summary deleted.");
+      await loadData(filters, true);
+      return true;
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Failed to delete loading summary.");
+      return false;
+    } finally {
+      setDeletingId(null);
+    }
+  }, [canCreate, filters, loadData]);
+
   return {
     filters,
     items,
@@ -288,6 +310,8 @@ export function useLoadingSummariesManagement() {
     updateFormValues,
     submitCreate,
     finalizeSummary,
-    canFinalize
+    canFinalize,
+    deleteSummary,
+    deletingId
   };
 }

@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { DailyReportInventoryEntryDto, DailyReportReturnDamageEntryDto } from "@/types/domain/report";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { Alert } from "@/components/ui/alert";
@@ -21,6 +20,7 @@ import {
   fetchReportInvoiceEntries,
   fetchReportReturnDamageEntries,
   saveReportCashDenominations,
+  importFlatDataReport,
   uploadReportAttachment,
   deleteReportAttachment,
   saveReportExpenseEntries,
@@ -29,6 +29,7 @@ import {
   saveReportReturnDamageEntries
 } from "@/features/reports/api/daily-reports-api";
 import { DailyReportStatusBadge } from "@/features/reports/components/daily-report-status-badge";
+import { FlatDataImportPanel } from "@/features/reports/components/flat-data-import-panel";
 import { ReportCashAuditPanel } from "@/features/reports/components/report-cash-audit-panel";
 import { ReportAttachmentsPanel } from "@/features/reports/components/report-attachments-panel";
 import { ReportAuditTrailPanel } from "@/features/reports/components/report-audit-trail-panel";
@@ -40,6 +41,7 @@ import { ReportReturnDamageEntriesPanel } from "@/features/reports/components/re
 import { ReportWorkspaceHeader } from "@/features/reports/components/report-workspace-header";
 import { ReportWorkspaceTabs } from "@/features/reports/components/report-workspace-tabs";
 import { useReportWorkspace } from "@/features/reports/hooks/use-report-workspace";
+import type { FlatDataParseResult } from "@/features/reports/utils/flatDataParser";
 import type {
   ExpenseCategoryOption,
   ProductOption,
@@ -49,6 +51,7 @@ import type {
   ReportReturnDamageBatchSaveItemInput,
   ReportWorkspaceTabKey
 } from "@/features/reports/types";
+import type { DailyReportInventoryEntryDto, DailyReportReturnDamageEntryDto } from "@/types/domain/report";
 
 function formatCurrencyLkr(amount: number) {
   return new Intl.NumberFormat("en-LK", {
@@ -64,19 +67,6 @@ function formatDate(value: string) {
     month: "short",
     day: "2-digit"
   }).format(new Date(value));
-}
-
-function TabPlaceholder({ title }: { title: string }) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>
-          This tab boundary is prepared. Data grid/form implementation can be added using existing nested endpoints.
-        </CardDescription>
-      </CardHeader>
-    </Card>
-  );
 }
 
 export function DailyReportWorkspaceView({ reportId }: { reportId: string }) {
@@ -97,6 +87,9 @@ export function DailyReportWorkspaceView({ reportId }: { reportId: string }) {
     canApprove,
     canReject,
     canReopen,
+    canImportFlatData,
+    canEditFinance,
+    canEditOperations,
     reload,
     actions
   } = useReportWorkspace(reportId);
@@ -305,6 +298,12 @@ export function DailyReportWorkspaceView({ reportId }: { reportId: string }) {
   }, [report]);
 
   useEffect(() => {
+    if ((activeTab === "overview" || activeTab === "flat-data") && report) {
+      void loadInvoiceRows();
+      void loadInventoryData();
+      void loadReturnDamageData();
+    }
+
     if (activeTab === "invoices" && report) {
       void loadInvoiceRows();
     }
@@ -333,6 +332,59 @@ export function DailyReportWorkspaceView({ reportId }: { reportId: string }) {
       void loadCashRows();
     }
   }, [activeTab, loadAttachmentRows, loadAuditRows, loadCashRows, loadExpenseData, loadInventoryData, loadInvoiceRows, loadReturnDamageData, report]);
+
+  // ---- Flat Data CSV import: ensure products are loaded for the import panel ----
+  useEffect(() => {
+    if (report && productOptions.length === 0) {
+      void fetchProductOptions().then(setProductOptions).catch(() => { /* silently ignore — products will load on tab switch */ });
+    }
+  }, [report, productOptions.length]);
+
+  const handleFlatDataImportConfirmed = useCallback(
+    async (result: FlatDataParseResult & { success: true }, options: { allowOverwrite: boolean }) => {
+      if (!report) return;
+
+      try {
+        setInvoiceSaving(true);
+        setInventorySaving(true);
+        setReturnDamageSaving(true);
+        setInvoiceError(null);
+        setInventoryError(null);
+        setReturnDamageError(null);
+
+        await importFlatDataReport(report.id, {
+          invoiceEntries: result.invoiceEntries,
+          inventorySales: Array.from(result.inventorySalesMap.entries()).map(([productId, sales]) => ({
+            productId,
+            salesQty: sales.salesQty,
+            salesRevenue: sales.salesRevenue,
+            costedSalesQty: sales.costedSalesQty
+          })),
+          returnDamageEntries: result.returnDamageEntries,
+          deliveredBillCount: result.deliveredBillCount,
+          allowOverwrite: options.allowOverwrite
+        });
+
+        await Promise.all([
+          loadInvoiceRows(),
+          loadInventoryData(),
+          loadReturnDamageData(),
+          reload()
+        ]);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to import Flat Data.";
+        setInvoiceError(message);
+        setInventoryError(message);
+        setReturnDamageError(message);
+        throw new Error(message);
+      } finally {
+        setInvoiceSaving(false);
+        setInventorySaving(false);
+        setReturnDamageSaving(false);
+      }
+    },
+    [loadInventoryData, loadInvoiceRows, loadReturnDamageData, report, reload]
+  );
 
   const handleSaveInvoiceRows = useCallback(async (items: ReportInvoiceBatchSaveItemInput[]) => {
     if (!report) return;
@@ -538,94 +590,129 @@ export function DailyReportWorkspaceView({ reportId }: { reportId: string }) {
           ) : null}
 
           {activeTab === "overview" ? (
-            <section className="grid gap-5 xl:grid-cols-[1.4fr_1fr]">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Report Metadata</CardTitle>
-                  <CardDescription>Primary operational fields for this daily report.</CardDescription>
-                </CardHeader>
-                <CardContent className="grid gap-4 sm:grid-cols-2">
-                  <label className="space-y-1">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Report Date</span>
-                    <input
-                      type="date"
-                      value={draftForm.reportDate}
-                      onChange={(event) => setDraftForm((prev) => ({ ...prev, reportDate: event.target.value }))}
-                      disabled={!canSaveDraft || saving}
-                      className="h-10 w-full rounded-md border border-slate-200 px-3 text-sm outline-none ring-offset-2 transition focus:border-blue-400 focus:ring-2 focus:ring-blue-200 disabled:bg-slate-100"
-                    />
-                  </label>
+            <>
+              <section className="grid gap-5 xl:grid-cols-[1.4fr_1fr]">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Route-Day Overview</CardTitle>
+                    <CardDescription>Primary operational fields for this route-day handover.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid gap-4 sm:grid-cols-2">
+                    <label className="space-y-1">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Report Date</span>
+                      <input
+                        type="date"
+                        value={draftForm.reportDate}
+                        onChange={(event) => setDraftForm((prev) => ({ ...prev, reportDate: event.target.value }))}
+                        disabled={!canSaveDraft || saving}
+                        className="h-10 w-full rounded-md border border-slate-200 px-3 text-sm outline-none ring-offset-2 transition focus:border-blue-400 focus:ring-2 focus:ring-blue-200 disabled:bg-slate-100"
+                      />
+                    </label>
 
-                  <div className="space-y-1">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Workflow Status</span>
-                    <div className="h-10 rounded-md border border-slate-200 px-3 py-2"><DailyReportStatusBadge status={report.status} /></div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Route</span>
-                    <div className="h-10 rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800">{report.routeNameSnapshot}</div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Territory</span>
-                    <div className="h-10 rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800">{report.territoryNameSnapshot}</div>
-                  </div>
-
-                  <label className="space-y-1">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Prepared By</span>
-                    <input
-                      value={draftForm.staffName}
-                      onChange={(event) => setDraftForm((prev) => ({ ...prev, staffName: event.target.value }))}
-                      disabled={!canSaveDraft || saving}
-                      className="h-10 w-full rounded-md border border-slate-200 px-3 text-sm outline-none ring-offset-2 transition focus:border-blue-400 focus:ring-2 focus:ring-blue-200 disabled:bg-slate-100"
-                    />
-                  </label>
-
-                  <div className="sm:col-span-2 space-y-1">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Remarks</span>
-                    <textarea
-                      rows={4}
-                      value={draftForm.remarks}
-                      onChange={(event) => setDraftForm((prev) => ({ ...prev, remarks: event.target.value }))}
-                      disabled={!canSaveDraft || saving}
-                      className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none ring-offset-2 transition focus:border-blue-400 focus:ring-2 focus:ring-blue-200 disabled:bg-slate-100"
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Financial Snapshot</CardTitle>
-                  <CardDescription>Auto-calculated values from report lines.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {summaryFacts?.map((fact) => (
-                    <div key={fact.label} className="flex items-center justify-between rounded-md border border-slate-100 px-3 py-2">
-                      <span className="text-sm text-slate-600">{fact.label}</span>
-                      <span className="text-sm font-semibold text-slate-900">{fact.value}</span>
+                    <div className="space-y-1">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Workflow Status</span>
+                      <div className="h-10 rounded-md border border-slate-200 px-3 py-2"><DailyReportStatusBadge status={report.status} /></div>
                     </div>
-                  ))}
 
-                  <div className="rounded-md border border-slate-100 px-3 py-2">
-                    <p className="text-xs uppercase tracking-wider text-slate-500">Last Updated</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-900">{formatDate(report.updatedAt)}</p>
-                  </div>
-
-                  <div className="rounded-md border border-slate-100 px-3 py-2">
-                    <p className="text-xs uppercase tracking-wider text-slate-500">Morning Loading</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-900">
-                      {report.loadingCompletedAt ? `Completed on ${formatDate(report.loadingCompletedAt)}` : "Pending completion"}
-                    </p>
-                    <div className="mt-2">
-                      <Button asChild variant="outline" size="sm">
-                        <Link href={`/loading-summaries/${report.loadingSummaryId}`}>Open Loading Summary</Link>
-                      </Button>
+                    <div className="space-y-1">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Route</span>
+                      <div className="h-10 rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800">{report.routeNameSnapshot}</div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </section>
+
+                    <div className="space-y-1">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Territory</span>
+                      <div className="h-10 rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800">{report.territoryNameSnapshot}</div>
+                    </div>
+
+                    <label className="space-y-1">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Prepared By</span>
+                      <input
+                        value={draftForm.staffName}
+                        onChange={(event) => setDraftForm((prev) => ({ ...prev, staffName: event.target.value }))}
+                        disabled={!canSaveDraft || saving}
+                        className="h-10 w-full rounded-md border border-slate-200 px-3 text-sm outline-none ring-offset-2 transition focus:border-blue-400 focus:ring-2 focus:ring-blue-200 disabled:bg-slate-100"
+                      />
+                    </label>
+
+                    <div className="sm:col-span-2 space-y-1">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Remarks</span>
+                      <textarea
+                        rows={4}
+                        value={draftForm.remarks}
+                        onChange={(event) => setDraftForm((prev) => ({ ...prev, remarks: event.target.value }))}
+                        disabled={!canSaveDraft || saving}
+                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none ring-offset-2 transition focus:border-blue-400 focus:ring-2 focus:ring-blue-200 disabled:bg-slate-100"
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Workflow Snapshot</CardTitle>
+                    <CardDescription>Current status for loading, Flat Data, stock count, and DATE closing.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="rounded-md border border-slate-100 px-3 py-2">
+                      <p className="text-xs uppercase tracking-wider text-slate-500">Flat Data</p>
+                      <p className="mt-1 text-sm font-semibold text-slate-900">
+                        {invoiceRows.length > 0 || inventoryRows.some((row) => row.salesQty > 0 || row.salesRevenueSnapshot > 0)
+                          ? "Imported or manually entered"
+                          : "Pending"}
+                      </p>
+                      <div className="mt-2">
+                        <Button type="button" variant="outline" size="sm" onClick={() => setActiveTab("flat-data")}>
+                          Upload Flat Data
+                        </Button>
+                      </div>
+                    </div>
+
+                    {summaryFacts?.map((fact) => (
+                      <div key={fact.label} className="flex items-center justify-between rounded-md border border-slate-100 px-3 py-2">
+                        <span className="text-sm text-slate-600">{fact.label}</span>
+                        <span className="text-sm font-semibold text-slate-900">{fact.value}</span>
+                      </div>
+                    ))}
+
+                    <div className="rounded-md border border-slate-100 px-3 py-2">
+                      <p className="text-xs uppercase tracking-wider text-slate-500">Last Updated</p>
+                      <p className="mt-1 text-sm font-semibold text-slate-900">{formatDate(report.updatedAt)}</p>
+                    </div>
+
+                    <div className="rounded-md border border-slate-100 px-3 py-2">
+                      <p className="text-xs uppercase tracking-wider text-slate-500">Morning Loading</p>
+                      <p className="mt-1 text-sm font-semibold text-slate-900">
+                        {report.loadingCompletedAt ? `Completed on ${formatDate(report.loadingCompletedAt)}` : "Pending completion"}
+                      </p>
+                      <div className="mt-2">
+                        <Button asChild variant="outline" size="sm">
+                          <Link href={`/loading-summaries/${report.loadingSummaryId}`}>Open Route Day Sheet</Link>
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </section>
+            </>
+          ) : null}
+
+          {activeTab === "flat-data" ? (
+            <FlatDataImportPanel
+              products={productOptions}
+              existingInvoiceRows={invoiceRows}
+              existingInventoryRows={inventoryRows}
+              existingReturnDamageRows={returnDamageRows}
+              canEdit={canImportFlatData && Boolean(report.loadingCompletedAt)}
+              disabledReason={
+                !report.loadingCompletedAt
+                  ? "Morning loading must be finalized first."
+                  : !canImportFlatData
+                    ? "No permission to import Flat Data."
+                    : null
+              }
+              saving={saving || invoiceSaving || inventorySaving || returnDamageSaving}
+              onImportConfirmed={handleFlatDataImportConfirmed}
+            />
           ) : null}
 
           {activeTab === "invoices" ? (
@@ -634,7 +721,7 @@ export function DailyReportWorkspaceView({ reportId }: { reportId: string }) {
               loading={invoiceLoading}
               saving={invoiceSaving || saving}
               error={invoiceError}
-              canEdit={canSaveDraft}
+              canEdit={canEditFinance}
               onSave={handleSaveInvoiceRows}
             />
           ) : null}
@@ -646,21 +733,29 @@ export function DailyReportWorkspaceView({ reportId }: { reportId: string }) {
               loading={expenseLoading}
               saving={expenseSaving || saving}
               error={expenseError}
-              canEdit={canSaveDraft}
+              canEdit={canEditFinance}
               onSave={handleSaveExpenseRows}
             />
           ) : null}
 
           {activeTab === "inventory" ? (
-            <ReportInventoryEntriesPanel
-              rows={inventoryRows}
-              products={productOptions}
-              loading={inventoryLoading}
-              saving={inventorySaving || saving}
-              error={inventoryError}
-              canEdit={canSaveDraft}
-              onSave={handleSaveInventoryRows}
-            />
+            <div className="space-y-4">
+              <Alert className="border-blue-200 bg-blue-50 text-blue-800">
+                Route stock movement is managed from the Route Day Sheet so loading, Flat Data sales, and counted lorry stock stay in one place.
+                <Button asChild variant="outline" size="sm" className="ml-0 mt-3 bg-white sm:ml-3 sm:mt-0">
+                  <Link href={`/loading-summaries/${report.loadingSummaryId}`}>Open Route Day Sheet</Link>
+                </Button>
+              </Alert>
+              <ReportInventoryEntriesPanel
+                rows={inventoryRows}
+                products={productOptions}
+                loading={inventoryLoading}
+                saving={inventorySaving || saving}
+                error={inventoryError}
+                canEdit={false}
+                onSave={handleSaveInventoryRows}
+              />
+            </div>
           ) : null}
 
           {activeTab === "returns-damage" ? (
@@ -670,7 +765,7 @@ export function DailyReportWorkspaceView({ reportId }: { reportId: string }) {
               loading={returnDamageLoading}
               saving={returnDamageSaving || saving}
               error={returnDamageError}
-              canEdit={canSaveDraft}
+              canEdit={canEditOperations}
               onSave={handleSaveReturnDamageRows}
             />
           ) : null}
@@ -687,7 +782,7 @@ export function DailyReportWorkspaceView({ reportId }: { reportId: string }) {
               cashBookTotal={report.cashBookTotal}
               cashPhysicalTotal={report.cashPhysicalTotal}
               cashDifference={report.cashDifference}
-              canEdit={canSaveDraft}
+              canEdit={canEditFinance}
               canFinalize={canSubmit}
               onSave={handleSaveCashRows}
               onFinalize={handleFinalizeCashAudit}
@@ -703,7 +798,7 @@ export function DailyReportWorkspaceView({ reportId }: { reportId: string }) {
             />
           ) : null}
 
-                    {activeTab === "attachments" ? (
+          {activeTab === "attachments" ? (
             <ReportAttachmentsPanel
               rows={attachmentRows}
               loading={attachmentsLoading}
@@ -711,13 +806,13 @@ export function DailyReportWorkspaceView({ reportId }: { reportId: string }) {
               uploadProgress={attachmentsUploadProgress}
               deletingPath={attachmentsDeletingPath}
               error={attachmentsError}
-              canEdit={canSaveDraft}
+              canEdit={canEditOperations}
               onUpload={handleUploadAttachment}
               onDelete={handleDeleteAttachment}
               onRefresh={loadAttachmentRows}
             />
           ) : null}
-                    {activeTab === "audit-trail" ? (
+          {activeTab === "audit-trail" ? (
             <ReportAuditTrailPanel
               rows={auditRows}
               loading={auditLoading}
@@ -729,28 +824,3 @@ export function DailyReportWorkspaceView({ reportId }: { reportId: string }) {
     </AppShell>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

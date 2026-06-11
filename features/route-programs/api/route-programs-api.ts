@@ -5,6 +5,7 @@ import type {
   RouteProgramListItem,
   RouteProgramListResponse
 } from "@/features/route-programs/types";
+import { fetchCachedAuthSession, redirectToLoginOnUnauthorized } from "@/features/auth/api/session-cache";
 
 type ApiEnvelope<T> = {
   data: T;
@@ -25,6 +26,7 @@ async function readEnvelope<T>(response: Response, fallback: string) {
   const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | ApiErrorEnvelope | null;
 
   if (!response.ok) {
+    redirectToLoginOnUnauthorized(response);
     throw new Error(toErrorMessage(payload, fallback));
   }
 
@@ -85,13 +87,7 @@ function toPayload(values: RouteProgramFormValues): RouteProgramCreatePayload {
 }
 
 export async function fetchAuthSession() {
-  const response = await fetch("/api/auth/me", {
-    method: "GET",
-    credentials: "include",
-    cache: "no-store"
-  });
-
-  return readEnvelope<AuthSession>(response, "Failed to load current session.");
+  return fetchCachedAuthSession<AuthSession>();
 }
 
 export async function fetchRoutePrograms(filters: RouteProgramFilterState) {

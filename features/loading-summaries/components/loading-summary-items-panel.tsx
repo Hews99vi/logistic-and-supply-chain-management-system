@@ -104,6 +104,10 @@ function parseIntegerInput(value: string) {
   return parsed;
 }
 
+function normalizeQuantityInput(value: string) {
+  return value.replace(/\D/g, "");
+}
+
 function resolveProduct(row: EditableLoadingRow, products: ProductOption[]) {
   const selected = products.find((product) => product.id === row.productId) ?? null;
 
@@ -185,11 +189,11 @@ function QuantityInput({
     <label className="space-y-1.5">
       <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{label}</span>
       <input
-        type="number"
-        step="1"
-        min="0"
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
         value={value}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => onChange(normalizeQuantityInput(event.target.value))}
         className="h-11 w-full rounded-md border border-slate-200 px-3 text-right text-sm outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-200 disabled:bg-slate-100"
         disabled={disabled}
       />
@@ -214,6 +218,7 @@ export function LoadingSummaryItemsPanel({
 }: LoadingSummaryItemsPanelProps) {
   const [editableRows, setEditableRows] = useState<EditableLoadingRow[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, RowErrors>>({});
+  const [productSearch, setProductSearch] = useState("");
 
   useEffect(() => {
     setEditableRows(rows.map(toEditableRow));
@@ -354,6 +359,28 @@ export function LoadingSummaryItemsPanel({
 
   const stageLabel = canEditEveningReconciliation ? "Evening Reconciliation" : "Morning Loading";
   const duplicateWarnings = useMemo(() => Object.values(fieldErrors).filter((item) => item.duplicate).length, [fieldErrors]);
+  const filteredProducts = useMemo(() => {
+    const normalizedSearch = productSearch.trim().toLowerCase();
+
+    if (!normalizedSearch) {
+      return products;
+    }
+
+    return products.filter((product) => {
+      return (
+        product.productCode.toLowerCase().includes(normalizedSearch)
+        || product.productName.toLowerCase().includes(normalizedSearch)
+      );
+    });
+  }, [productSearch, products]);
+  const getSelectableProducts = (selectedProductId: string) => {
+    if (!selectedProductId || filteredProducts.some((product) => product.id === selectedProductId)) {
+      return filteredProducts;
+    }
+
+    const selectedProduct = products.find((product) => product.id === selectedProductId);
+    return selectedProduct ? [selectedProduct, ...filteredProducts] : filteredProducts;
+  };
 
   return (
     <Card>
@@ -405,6 +432,22 @@ export function LoadingSummaryItemsPanel({
             Morning stage is active. Enter loading quantities now, then finalize morning loading before this same sheet can be used for evening sales and lorry reconciliation.
           </Alert>
         )}
+
+        {canEditStructure ? (
+          <label className="block space-y-1.5 rounded-lg border border-slate-200 bg-white p-3">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Search products to add</span>
+            <input
+              value={productSearch}
+              onChange={(event) => setProductSearch(event.target.value)}
+              placeholder="Search by product code or product name"
+              className="h-11 w-full rounded-md border border-slate-200 px-3 text-sm outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-200"
+              disabled={saving || loading}
+            />
+            <p className="text-xs text-slate-500">
+              Showing {filteredProducts.length} of {products.length} products.
+            </p>
+          </label>
+        ) : null}
 
         <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm sm:grid-cols-2 xl:grid-cols-6">
           <SummaryMetric label="Current Stage" value={stageLabel} />
@@ -477,8 +520,10 @@ export function LoadingSummaryItemsPanel({
                         disabled={!canEditStructure || saving}
                       >
                         <option value="">Select product</option>
-                        {products.map((option) => (
-                          <option key={option.id} value={option.id}>{option.productName}</option>
+                        {getSelectableProducts(row.productId).map((option) => (
+                          <option key={option.id} value={option.id}>
+                            {option.productCode} - {option.productName}
+                          </option>
                         ))}
                       </select>
                     ) : (
@@ -600,8 +645,10 @@ export function LoadingSummaryItemsPanel({
                               disabled={!canEditStructure || saving}
                             >
                               <option value="">Select product</option>
-                              {products.map((option) => (
-                                <option key={option.id} value={option.id}>{option.productName}</option>
+                              {getSelectableProducts(row.productId).map((option) => (
+                                <option key={option.id} value={option.id}>
+                                  {option.productCode} - {option.productName}
+                                </option>
                               ))}
                             </select>
                             {rowError?.productId ? <p className="mt-1 text-xs text-rose-600">{rowError.productId}</p> : null}
@@ -619,11 +666,11 @@ export function LoadingSummaryItemsPanel({
                       </td>
                       <td className="px-3 py-3 align-top">
                         <input
-                          type="number"
-                          step="1"
-                          min="0"
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
                           value={row.loadingQty}
-                          onChange={(event) => updateRow(row.clientId, "loadingQty", event.target.value)}
+                          onChange={(event) => updateRow(row.clientId, "loadingQty", normalizeQuantityInput(event.target.value))}
                           className="h-10 w-24 rounded-md border border-slate-200 px-2 text-right text-sm outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-200 disabled:bg-slate-100"
                           disabled={!canEditMorningLoading || saving}
                         />
@@ -633,11 +680,11 @@ export function LoadingSummaryItemsPanel({
                       </td>
                       <td className="px-3 py-3 align-top">
                         <input
-                          type="number"
-                          step="1"
-                          min="0"
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
                           value={row.salesQty}
-                          onChange={(event) => updateRow(row.clientId, "salesQty", event.target.value)}
+                          onChange={(event) => updateRow(row.clientId, "salesQty", normalizeQuantityInput(event.target.value))}
                           className="h-10 w-24 rounded-md border border-slate-200 px-2 text-right text-sm outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-200 disabled:bg-slate-100"
                           disabled={!canEditEveningReconciliation || saving}
                         />
@@ -652,11 +699,11 @@ export function LoadingSummaryItemsPanel({
                       </td>
                       <td className="px-3 py-3 align-top">
                         <input
-                          type="number"
-                          step="1"
-                          min="0"
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
                           value={row.lorryQty}
-                          onChange={(event) => updateRow(row.clientId, "lorryQty", event.target.value)}
+                          onChange={(event) => updateRow(row.clientId, "lorryQty", normalizeQuantityInput(event.target.value))}
                           className="h-10 w-24 rounded-md border border-slate-200 px-2 text-right text-sm outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-200 disabled:bg-slate-100"
                           disabled={!canEditEveningReconciliation || saving}
                         />
@@ -698,5 +745,3 @@ export function LoadingSummaryItemsPanel({
     </Card>
   );
 }
-
-

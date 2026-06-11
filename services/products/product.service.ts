@@ -1,4 +1,4 @@
-import { requireAuth, requireRole } from "@/lib/auth/helpers";
+import { checkFeaturePermission, requireFeaturePermission } from "@/lib/auth/permissions";
 import { errorResponse, fromPostgrestError, successResponse } from "@/lib/db/response";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getPaginationRange, uuidSchema } from "@/lib/validation/common";
@@ -15,6 +15,7 @@ type ProductRecord = {
   product_name: string;
   category: string | null;
   unit_price: number;
+  distributor_price: number;
   sku: string | null;
   brand: string | null;
   product_family: string;
@@ -41,6 +42,7 @@ const PRODUCT_SELECT = `
   product_name,
   category,
   unit_price,
+  distributor_price,
   sku,
   brand,
   product_family,
@@ -144,9 +146,10 @@ function deriveQuantityEntryMode(input: {
   return input.sellingUnit?.trim().toLowerCase() === "unit" ? "unit" : "pack";
 }
 
-function mapProduct(record: ProductRecord) {
+function mapProduct(record: ProductRecord, canViewCosts: boolean) {
   return {
     ...record,
+    distributor_price: canViewCosts ? record.distributor_price : null,
     category: record.category ?? "OTHER",
     quantity_entry_mode: deriveQuantityEntryMode({
       quantityEntryMode: record.quantity_entry_mode,
@@ -163,6 +166,7 @@ async function resolveActiveOrganizationId(userId: string) {
     .select("organization_id")
     .eq("user_id", userId)
     .eq("status", "ACTIVE")
+    .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle()) as {
     data: MembershipLookup | null;
@@ -221,7 +225,7 @@ async function getScopedProduct(productId: string, organizationId: string) {
 
 export class ProductService {
   static async listProducts(request: Request) {
-    const auth = await requireAuth();
+    const auth = await requireFeaturePermission("products", "view");
     if (auth.response || !auth.context) {
       return auth.response;
     }
@@ -246,13 +250,13 @@ export class ProductService {
       );
     }
 
-    const { page, pageSize, search, category, isActive } = parsed.data;
+    const { page, pageSize, search, category, isActive, includeCount } = parsed.data;
     const { from, to } = getPaginationRange(page, pageSize);
     const supabase = await createSupabaseServerClient();
 
     let query = supabase
       .from("products")
-      .select(PRODUCT_SELECT, { count: "exact" })
+      .select(PRODUCT_SELECT, includeCount ? { count: "exact" } : undefined)
       .eq("organization_id", membership.organizationId)
       .order("product_name", { ascending: true })
       .range(from, to);
@@ -282,16 +286,18 @@ export class ProductService {
       return fromPostgrestError(error);
     }
 
+    const canViewCosts = await checkFeaturePermission("products", "view_costs", membership.organizationId);
+
     return successResponse({
-      items: (data ?? []).map(mapProduct),
+      items: (data ?? []).map((record) => mapProduct(record, canViewCosts)),
       page,
       pageSize,
-      total: count ?? 0
+      total: includeCount ? count ?? 0 : data?.length ?? 0
     });
   }
 
   static async getProductById(productId: string) {
-    const auth = await requireAuth();
+    const auth = await requireFeaturePermission("products", "view");
     if (auth.response || !auth.context) {
       return auth.response;
     }
@@ -319,11 +325,13 @@ export class ProductService {
       return product.response;
     }
 
-    return successResponse(mapProduct(product.data));
+    const canViewCosts = await checkFeaturePermission("products", "view_costs", membership.organizationId);
+
+    return successResponse(mapProduct(product.data, canViewCosts));
   }
 
   static async createProduct(request: Request) {
-    const auth = await requireRole(["admin", "supervisor"]);
+    const auth = await requireFeaturePermission("products", "create");
     if (auth.response || !auth.context) {
       return auth.response;
     }
@@ -374,6 +382,7 @@ export class ProductService {
       resolvedProductFamily;
     const resolvedProductName = normalizeOptionalText(parsed.data.productName) ?? resolvedDisplayName;
 
+    const canEditCosts = await checkFeaturePermission("products", "edit_costs", membership.organizationId);
     const supabase = await createSupabaseServerClient();
     const { data, error } = (await supabase
       .from("products")
@@ -385,6 +394,7 @@ export class ProductService {
         category: parsed.data.category ?? "OTHER",
         unit_price: parsed.data.unitPrice,
         base_price: parsed.data.unitPrice,
+        distributor_price: canEditCosts ? parsed.data.distributorPrice ?? 0 : 0,
         sku: parsed.data.sku ?? null,
         brand: resolvedBrand,
         product_family: resolvedProductFamily,
@@ -409,11 +419,11 @@ export class ProductService {
       return fromPostgrestError(error);
     }
 
-    return successResponse(mapProduct(data as ProductRecord), { status: 201 });
+    return successResponse(mapProduct(data as ProductRecord, canEditCosts), { status: 201 });
   }
 
   static async updateProduct(productId: string, request: Request) {
-    const auth = await requireRole(["admin", "supervisor"]);
+    const auth = await requireFeaturePermission("products", "edit");
     if (auth.response || !auth.context) {
       return auth.response;
     }
@@ -495,6 +505,12 @@ export class ProductService {
       updatePayload.base_price = parsed.data.unitPrice;
     }
 
+    const canEditCosts = await checkFeaturePermission("products", "edit_costs", membership.organizationId);
+
+    if (parsed.data.distributorPrice !== undefined && canEditCosts) {
+      updatePayload.distributor_price = parsed.data.distributorPrice;
+    }
+
     if (parsed.data.sku !== undefined) {
       updatePayload.sku = parsed.data.sku ?? null;
     }
@@ -573,11 +589,13 @@ export class ProductService {
       return errorResponse(404, "PRODUCT_NOT_FOUND", "Product not found.");
     }
 
-    return successResponse(mapProduct(data));
+    const canViewCosts = await checkFeaturePermission("products", "view_costs", membership.organizationId);
+
+    return successResponse(mapProduct(data, canViewCosts));
   }
 
   static async deactivateProduct(productId: string) {
-    const auth = await requireRole(["admin", "supervisor"]);
+    const auth = await requireFeaturePermission("products", "delete");
     if (auth.response || !auth.context) {
       return auth.response;
     }
@@ -620,6 +638,8 @@ export class ProductService {
       return errorResponse(404, "PRODUCT_NOT_FOUND", "Product not found.");
     }
 
-    return successResponse(mapProduct(data));
+    const canViewCosts = await checkFeaturePermission("products", "view_costs", membership.organizationId);
+
+    return successResponse(mapProduct(data, canViewCosts));
   }
 }

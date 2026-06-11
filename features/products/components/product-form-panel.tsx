@@ -46,6 +46,9 @@ const productFormSchema = z.object({
   quantityEntryMode: z.enum(["pack", "unit"]),
   category: z.union([z.literal(""), z.enum(["MILK", "YOGURT", "CHEESE", "BUTTER", "ICE_CREAM", "OTHER"])]),
   unitPrice: nonNegativeNumberField,
+  distributorPrice: nonNegativeNumberField,
+  wholesalePrice: nonNegativeNumberField,
+  pieceMargin: nonNegativeNumberField,
   isActive: z.boolean()
 }).superRefine((value, ctx) => {
   const hasUnitSize = value.unitSize.trim().length > 0;
@@ -65,12 +68,13 @@ type ProductFormModalProps = {
   formState: ProductFormState;
   formError: string | null;
   submitting: boolean;
+  canManageProductCosts: boolean;
   onClose: () => void;
   onChange: (next: ProductFormValues) => void;
   onSubmit: () => Promise<void> | void;
 };
 
-export function ProductFormPanel({ formState, formError, submitting, onClose, onChange, onSubmit }: ProductFormModalProps) {
+export function ProductFormPanel({ formState, formError, submitting, canManageProductCosts, onClose, onChange, onSubmit }: ProductFormModalProps) {
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof ProductFormValues, string>>>({});
   const isCreate = formState.mode === "create";
   const productCodeRef = useRef<HTMLInputElement | null>(null);
@@ -300,6 +304,56 @@ export function ProductFormPanel({ formState, formError, submitting, onClose, on
                 />
                 {fieldErrors.unitPrice ? <p className="text-xs text-red-600">{fieldErrors.unitPrice}</p> : null}
               </label>
+
+              {canManageProductCosts ? (
+                <>
+                  <label className="space-y-1.5">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Distributor Price (LKR)</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={formState.values.distributorPrice}
+                      onChange={(event) => onChange({ ...formState.values, distributorPrice: event.target.value })}
+                      placeholder="0.00"
+                      className={`${inputClass} ${fieldErrors.distributorPrice ? "border-red-300" : "border-slate-200"}`}
+                      disabled={submitting}
+                      aria-invalid={Boolean(fieldErrors.distributorPrice)}
+                    />
+                    {fieldErrors.distributorPrice ? <p className="text-xs text-red-600">{fieldErrors.distributorPrice}</p> : null}
+                  </label>
+                  <label className="space-y-1.5">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Wholesale Price (LKR)</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={formState.values.wholesalePrice}
+                      onChange={(event) => onChange({ ...formState.values, wholesalePrice: event.target.value })}
+                      placeholder="0.00"
+                      className={`${inputClass} ${fieldErrors.wholesalePrice ? "border-red-300" : "border-slate-200"}`}
+                      disabled={submitting}
+                      aria-invalid={Boolean(fieldErrors.wholesalePrice)}
+                    />
+                    {fieldErrors.wholesalePrice ? <p className="text-xs text-red-600">{fieldErrors.wholesalePrice}</p> : null}
+                  </label>
+                  <label className="space-y-1.5">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Piece Margin (LKR)</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={formState.values.pieceMargin}
+                      onChange={(event) => onChange({ ...formState.values, pieceMargin: event.target.value })}
+                      placeholder="0.00"
+                      className={`${inputClass} ${fieldErrors.pieceMargin ? "border-red-300" : "border-slate-200"}`}
+                      disabled={submitting}
+                      aria-invalid={Boolean(fieldErrors.pieceMargin)}
+                    />
+                    {fieldErrors.pieceMargin ? <p className="text-xs text-red-600">{fieldErrors.pieceMargin}</p> : null}
+                  </label>
+                </>
+              ) : null}
 
               <label className="space-y-1.5">
                 <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Status</span>

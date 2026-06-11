@@ -1,6 +1,6 @@
-import { requireAuth } from "@/lib/auth/helpers";
+import { requireAppAccess, requireAuth } from "@/lib/auth/helpers";
+import { checkFeaturePermission, requireFeaturePermission } from "@/lib/auth/permissions";
 import { errorResponse, fromPostgrestError, successResponse } from "@/lib/db/response";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   dailyReportCreateSchema,
@@ -15,6 +15,7 @@ import type {
   DailyReportCashDenominationDto,
   DailyReportDetailDto,
   DailyReportExpenseEntryDto,
+  DriverDeductionDto,
   DailyReportInventoryEntryDto,
   DailyReportInvoiceEntryDto,
   DailyReportListItemDto,
@@ -117,6 +118,10 @@ type NestedDailyReportRow = DailyReportRow & {
     selling_unit_snapshot: string | null;
     quantity_entry_mode_snapshot: "pack" | "unit" | null;
     unit_price_snapshot: number;
+    distributor_price_snapshot: number;
+    sales_revenue_snapshot: number;
+    costed_sales_qty_snapshot: number;
+    gross_profit_snapshot: number;
     loading_qty: number;
     sales_qty: number;
     balance_qty: number;
@@ -148,6 +153,26 @@ type NestedDailyReportRow = DailyReportRow & {
     return_qty: number;
     free_issue_qty: number;
     notes: string | null;
+    created_at: string;
+    updated_at: string;
+  }> | null;
+  driver_deductions: Array<{
+    id: string;
+    daily_report_id: string;
+    driver_id: string;
+    product_id: string;
+    product_code_snapshot: string;
+    product_name_snapshot: string;
+    missing_qty: number;
+    unit_price_snapshot: number;
+    deduction_amount: number;
+    reason: string;
+    status: "pending" | "approved" | "waived" | "settled";
+    approved_by: string | null;
+    approved_at: string | null;
+    waived_by: string | null;
+    waived_at: string | null;
+    settled_at: string | null;
     created_at: string;
     updated_at: string;
   }> | null;
@@ -238,6 +263,10 @@ const DAILY_REPORT_DETAIL_SELECT = `
     selling_unit_snapshot,
     quantity_entry_mode_snapshot,
     unit_price_snapshot,
+    distributor_price_snapshot,
+    sales_revenue_snapshot,
+    costed_sales_qty_snapshot,
+    gross_profit_snapshot,
     loading_qty,
     sales_qty,
     balance_qty,
@@ -269,6 +298,26 @@ const DAILY_REPORT_DETAIL_SELECT = `
     return_qty,
     free_issue_qty,
     notes,
+    created_at,
+    updated_at
+  ),
+  driver_deductions:driver_deductions (
+    id,
+    daily_report_id,
+    driver_id,
+    product_id,
+    product_code_snapshot,
+    product_name_snapshot,
+    missing_qty,
+    unit_price_snapshot,
+    deduction_amount,
+    reason,
+    status,
+    approved_by,
+    approved_at,
+    waived_by,
+    waived_at,
+    settled_at,
     created_at,
     updated_at
   )
@@ -369,6 +418,10 @@ function mapInventoryEntries(rows: NestedDailyReportRow["inventory_entries"]): D
     sellingUnitSnapshot: row.selling_unit_snapshot,
     quantityEntryModeSnapshot: row.quantity_entry_mode_snapshot,
     unitPriceSnapshot: row.unit_price_snapshot,
+    distributorPriceSnapshot: row.distributor_price_snapshot,
+    salesRevenueSnapshot: row.sales_revenue_snapshot,
+    costedSalesQtySnapshot: row.costed_sales_qty_snapshot,
+    grossProfitSnapshot: row.gross_profit_snapshot,
     loadingQty: row.loading_qty,
     salesQty: row.sales_qty,
     balanceQty: row.balance_qty,
@@ -408,6 +461,29 @@ function mapReturnDamageEntries(rows: NestedDailyReportRow["return_damage_entrie
   }));
 }
 
+function mapDriverDeductions(rows: NestedDailyReportRow["driver_deductions"]): DriverDeductionDto[] {
+  return (rows ?? []).map((row) => ({
+    id: row.id,
+    dailyReportId: row.daily_report_id,
+    driverId: row.driver_id,
+    productId: row.product_id,
+    productCodeSnapshot: row.product_code_snapshot,
+    productNameSnapshot: row.product_name_snapshot,
+    missingQty: row.missing_qty,
+    unitPriceSnapshot: row.unit_price_snapshot,
+    deductionAmount: row.deduction_amount,
+    reason: row.reason,
+    status: row.status,
+    approvedBy: row.approved_by,
+    approvedAt: row.approved_at,
+    waivedBy: row.waived_by,
+    waivedAt: row.waived_at,
+    settledAt: row.settled_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  }));
+}
+
 async function resolveActiveOrganizationId(userId: string) {
   const supabase = await createSupabaseServerClient();
   const membershipResult = (await supabase
@@ -415,6 +491,7 @@ async function resolveActiveOrganizationId(userId: string) {
     .select("organization_id")
     .eq("user_id", userId)
     .eq("status", "ACTIVE")
+    .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle()) as {
       data: MembershipLookup | null;
@@ -564,7 +641,7 @@ function escapeLikePattern(input: string) {
 
 export class DailyReportService {
   static async createReport(request: Request) {
-    const auth = await requireAuth();
+    const auth = await requireFeaturePermission("daily_reports", "create");
     if (auth.response || !auth.context) {
       return auth.response;
     }
@@ -598,9 +675,9 @@ export class DailyReportService {
       return successResponse<DailyReportBaseDto>(mapDailyReportBase(existingRouteDayReport.data));
     }
 
-    // Authorization is enforced before this write. Using the admin client here avoids
-    // brittle insert-time RLS or trigger failures on initial report creation.
-    const supabase = createSupabaseAdminClient();
+    // Use the authenticated server client so database guards that depend on
+    // auth.uid() can validate the actor during insert.
+    const supabase = await createSupabaseServerClient();
     const insertPayload = {
       report_date: parsed.data.reportDate,
       route_program_id: parsed.data.routeProgramId,
@@ -649,7 +726,7 @@ export class DailyReportService {
   }
 
   static async getReportById(reportId: string) {
-    const auth = await requireAuth();
+    const auth = await requireFeaturePermission("daily_reports", "view");
     if (auth.response) {
       return auth.response;
     }
@@ -686,14 +763,15 @@ export class DailyReportService {
       expenseEntries: mapExpenseEntries(data.expense_entries),
       cashDenominations: mapCashDenominations(data.cash_denominations),
       inventoryEntries: mapInventoryEntries(data.inventory_entries),
-      returnDamageEntries: mapReturnDamageEntries(data.return_damage_entries)
+      returnDamageEntries: mapReturnDamageEntries(data.return_damage_entries),
+      driverDeductions: mapDriverDeductions(data.driver_deductions)
     };
 
     return successResponse(response);
   }
 
   static async listReports(request: Request) {
-    const auth = await requireAuth();
+    const auth = await requireFeaturePermission("daily_reports", "view");
     if (auth.response) {
       return auth.response;
     }
@@ -792,7 +870,7 @@ export class DailyReportService {
   }
 
   static async updateDraftReport(reportId: string, request: Request) {
-    const auth = await requireAuth();
+    const auth = await requireAppAccess();
     if (auth.response || !auth.context) {
       return auth.response;
     }
@@ -819,7 +897,8 @@ export class DailyReportService {
     if (parsed.data.reportDate !== undefined) updatePayload.report_date = parsed.data.reportDate;
     if (parsed.data.staffName !== undefined) updatePayload.staff_name = parsed.data.staffName;
     if (parsed.data.remarks !== undefined) updatePayload.remarks = parsed.data.remarks ?? null;
-    if (parsed.data.totalSale !== undefined) updatePayload.total_sale = parsed.data.totalSale;
+    // total_sale is derived from invoice totals by recalculate_daily_report_totals.
+    // Ignore client-supplied totalSale so profit cannot drift from invoice data.
     if (parsed.data.dbMarginPercent !== undefined) updatePayload.db_margin_percent = parsed.data.dbMarginPercent;
     if (parsed.data.cashInHand !== undefined) updatePayload.cash_in_hand = parsed.data.cashInHand;
     if (parsed.data.cashInBank !== undefined) updatePayload.cash_in_bank = parsed.data.cashInBank;
@@ -827,8 +906,7 @@ export class DailyReportService {
     if (parsed.data.deliveredBillCount !== undefined) updatePayload.delivered_bill_count = parsed.data.deliveredBillCount;
     if (parsed.data.cancelledBillCount !== undefined) updatePayload.cancelled_bill_count = parsed.data.cancelledBillCount;
 
-    if (parsed.data.routeProgramId !== undefined) {
-      const membership = await resolveActiveOrganizationId(auth.context.user.id);
+    const membership = await resolveActiveOrganizationId(auth.context.user.id);
     if (membership.response || !membership.organizationId) {
       return membership.response ?? errorResponse(
         403,
@@ -836,7 +914,33 @@ export class DailyReportService {
         "An active organization membership is required to access route programs for daily reports."
       );
     }
-    const routeProgram = await getRouteProgramSnapshot(parsed.data.routeProgramId, membership.organizationId);
+
+    const touchesOperationalFields =
+      parsed.data.reportDate !== undefined ||
+      parsed.data.staffName !== undefined ||
+      parsed.data.remarks !== undefined ||
+      parsed.data.routeProgramId !== undefined;
+
+    const touchesFinanceFields =
+      parsed.data.dbMarginPercent !== undefined ||
+      parsed.data.cashInHand !== undefined ||
+      parsed.data.cashInBank !== undefined ||
+      parsed.data.totalBillCount !== undefined ||
+      parsed.data.deliveredBillCount !== undefined ||
+      parsed.data.cancelledBillCount !== undefined ||
+      parsed.data.totalSale !== undefined;
+
+    const canEditOperations = !touchesOperationalFields
+      || await checkFeaturePermission("daily_reports", "edit", membership.organizationId);
+    const canEditFinance = !touchesFinanceFields
+      || await checkFeaturePermission("date_sheet", "edit", membership.organizationId);
+
+    if (!canEditOperations || !canEditFinance) {
+      return errorResponse(403, "FORBIDDEN", "Missing permission to update these report fields.");
+    }
+
+    if (parsed.data.routeProgramId !== undefined) {
+      const routeProgram = await getRouteProgramSnapshot(parsed.data.routeProgramId, membership.organizationId);
       if (routeProgram.response || !routeProgram.data) {
         return routeProgram.response;
       }
@@ -981,16 +1085,6 @@ export class DailyReportService {
     return successResponse(summary);
   }
 }
-
-
-
-
-
-
-
-
-
-
 
 
 

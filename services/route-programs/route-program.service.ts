@@ -1,4 +1,4 @@
-﻿import { requireAuth, requireRole } from "@/lib/auth/helpers";
+﻿import { requireFeaturePermission } from "@/lib/auth/permissions";
 import { errorResponse, fromPostgrestError, successResponse } from "@/lib/db/response";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getPaginationRange, uuidSchema } from "@/lib/validation/common";
@@ -34,6 +34,7 @@ async function resolveActiveOrganizationId(userId: string) {
     .select("organization_id")
     .eq("user_id", userId)
     .eq("status", "ACTIVE")
+    .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle()) as {
     data: MembershipLookup | null;
@@ -66,7 +67,7 @@ async function resolveActiveOrganizationId(userId: string) {
 
 export class RouteProgramService {
   static async listRoutePrograms(request: Request) {
-    const auth = await requireAuth();
+    const auth = await requireFeaturePermission("route_programs", "view");
     if (auth.response || !auth.context) {
       return auth.response;
     }
@@ -91,13 +92,13 @@ export class RouteProgramService {
       );
     }
 
-    const { page, pageSize, search, territory, dayOfWeek, isActive } = parsed.data;
+    const { page, pageSize, search, territory, dayOfWeek, isActive, includeCount } = parsed.data;
     const { from, to } = getPaginationRange(page, pageSize);
     const supabase = await createSupabaseServerClient();
 
     let query = supabase
       .from("route_programs")
-      .select(ROUTE_PROGRAM_SELECT, { count: "exact" })
+      .select(ROUTE_PROGRAM_SELECT, includeCount ? { count: "exact" } : undefined)
       .eq("organization_id", membership.organizationId)
       .order("territory_name", { ascending: true })
       .range(from, to);
@@ -133,12 +134,12 @@ export class RouteProgramService {
       items: data ?? [],
       page,
       pageSize,
-      total: count ?? 0
+      total: includeCount ? count ?? 0 : data?.length ?? 0
     });
   }
 
   static async getRouteProgramById(routeProgramId: string) {
-    const auth = await requireAuth();
+    const auth = await requireFeaturePermission("route_programs", "view");
     if (auth.response || !auth.context) {
       return auth.response;
     }
@@ -184,7 +185,7 @@ export class RouteProgramService {
   }
 
   static async createRouteProgram(request: Request) {
-    const auth = await requireRole(["admin", "supervisor"]);
+    const auth = await requireFeaturePermission("route_programs", "create");
     if (auth.response || !auth.context) {
       return auth.response;
     }
@@ -235,7 +236,7 @@ export class RouteProgramService {
   }
 
   static async updateRouteProgram(routeProgramId: string, request: Request) {
-    const auth = await requireRole(["admin", "supervisor"]);
+    const auth = await requireFeaturePermission("route_programs", "edit");
     if (auth.response || !auth.context) {
       return auth.response;
     }
@@ -310,7 +311,7 @@ export class RouteProgramService {
   }
 
   static async deactivateRouteProgram(routeProgramId: string) {
-    const auth = await requireRole(["admin", "supervisor"]);
+    const auth = await requireFeaturePermission("route_programs", "delete");
     if (auth.response || !auth.context) {
       return auth.response;
     }

@@ -1,6 +1,9 @@
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { clearCachedAuthSession } from "@/features/auth/api/session-cache";
 
 export async function signInWithPassword(email: string, password: string) {
+  clearCachedAuthSession();
+
   const supabase = createSupabaseBrowserClient();
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
@@ -15,6 +18,7 @@ export async function signInWithPassword(email: string, password: string) {
   });
 
   if (!sessionResponse.ok) {
+    clearCachedAuthSession();
     await supabase.auth.signOut();
 
     const body = (await sessionResponse.json().catch(() => null)) as {
@@ -24,6 +28,7 @@ export async function signInWithPassword(email: string, password: string) {
     throw new Error(body?.error?.message ?? "Your account is not active.");
   }
 
+  clearCachedAuthSession();
   return data;
 }
 

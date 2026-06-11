@@ -89,6 +89,10 @@ export type DailyReportInventoryEntryDto = ProductSnapshotDto & {
   productCodeSnapshot: string;
   productNameSnapshot: string;
   unitPriceSnapshot: number;
+  distributorPriceSnapshot: number;
+  salesRevenueSnapshot: number;
+  costedSalesQtySnapshot: number;
+  grossProfitSnapshot: number;
   loadingQty: number;
   salesQty: number;
   balanceQty: number;
@@ -112,6 +116,29 @@ export type DailyReportReturnDamageEntryDto = ProductSnapshotDto & {
   returnQty: number;
   freeIssueQty: number;
   notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type DriverDeductionStatus = "pending" | "approved" | "waived" | "settled";
+
+export type DriverDeductionDto = {
+  id: string;
+  dailyReportId: string;
+  driverId: string;
+  productId: string;
+  productCodeSnapshot: string;
+  productNameSnapshot: string;
+  missingQty: number;
+  unitPriceSnapshot: number;
+  deductionAmount: number;
+  reason: string;
+  status: DriverDeductionStatus;
+  approvedBy: string | null;
+  approvedAt: string | null;
+  waivedBy: string | null;
+  waivedAt: string | null;
+  settledAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -145,6 +172,7 @@ export type DailyReportDetailDto = {
   cashDenominations: DailyReportCashDenominationDto[];
   inventoryEntries: DailyReportInventoryEntryDto[];
   returnDamageEntries: DailyReportReturnDamageEntryDto[];
+  driverDeductions: DriverDeductionDto[];
 };
 
 export type DailyReportListItemDto = DailyReportBaseDto;

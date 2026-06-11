@@ -1,15 +1,25 @@
 import { errorResponse, successResponse } from "@/lib/db/response";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { requireAuth } from "@/lib/auth/helpers";
+import { requireAppAccess } from "@/lib/auth/helpers";
+import { getResolvedFeaturePermissions } from "@/lib/auth/permissions";
 import { signUpSchema } from "@/lib/validation/auth";
 
 export class AuthService {
   static async getCurrentSession() {
-    const auth = await requireAuth();
+    const auth = await requireAppAccess();
 
     if (auth.response || !auth.context) {
       return auth.response ?? errorResponse(401, "AUTH_SESSION_INVALID", "Authentication required.");
     }
+
+    const organizationId = auth.context.organization?.id ?? null;
+    const permissions = organizationId
+      ? await getResolvedFeaturePermissions({
+        userId: auth.context.user.id,
+        role: auth.context.profile.role,
+        organizationId
+      })
+      : null;
 
     return successResponse({
       user: {
@@ -18,6 +28,8 @@ export class AuthService {
         authRole: auth.context.user.role,
         profileRole: auth.context.profile.role,
         isActive: auth.context.profile.is_active,
+        organizationId,
+        permissions,
         metadata: auth.context.user.user_metadata
       }
     });

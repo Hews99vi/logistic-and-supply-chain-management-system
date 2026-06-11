@@ -2,9 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
-  reactStrictMode: true,
+  reactStrictMode: false,
   typedRoutes: true
 };
 
 export default nextConfig;
-

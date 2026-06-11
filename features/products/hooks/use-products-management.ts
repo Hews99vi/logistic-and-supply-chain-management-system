@@ -29,9 +29,12 @@ const DEFAULT_FORM_VALUES: ProductFormValues = {
   unitMeasure: "",
   packSize: "",
   sellingUnit: "",
-  quantityEntryMode: "pack",
+  quantityEntryMode: "unit",
   category: "",
   unitPrice: "",
+  distributorPrice: "0",
+  wholesalePrice: "0",
+  pieceMargin: "0",
   isActive: true
 };
 
@@ -64,6 +67,9 @@ function toFormValues(product: ProductListItem): ProductFormValues {
     quantityEntryMode: toQuantityEntryModeValue(product.quantity_entry_mode),
     category: toCategoryValue(product.category),
     unitPrice: String(product.unit_price),
+    distributorPrice: String(product.distributor_price ?? 0),
+    wholesalePrice: String(product.wholesale_price ?? 0),
+    pieceMargin: String(product.piece_margin ?? 0),
     isActive: product.is_active
   };
 }
@@ -145,6 +151,10 @@ export function useProductsManagement() {
   const canManageProducts = useMemo(() => {
     if (!isUserActive) return false;
     return sessionRole === "admin" || sessionRole === "supervisor";
+  }, [isUserActive, sessionRole]);
+
+  const canManageProductCosts = useMemo(() => {
+    return isUserActive && sessionRole === "admin";
   }, [isUserActive, sessionRole]);
 
   const setCategory = useCallback((category: ProductCategory | "") => {
@@ -275,6 +285,7 @@ export function useProductsManagement() {
     formSubmitting,
     togglingProductId,
     canManageProducts,
+    canManageProductCosts,
     setSearchInput,
     setCategory,
     setStatus,

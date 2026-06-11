@@ -16,10 +16,11 @@ function normalizeRegistered(value: string | string[] | undefined) {
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
+  const nextPath = resolvedSearchParams.next ?? resolvedSearchParams.redirectTo;
 
   return (
     <LoginForm
-      nextPath={normalizeNextPath(resolvedSearchParams.next)}
+      nextPath={normalizeNextPath(nextPath)}
       registered={normalizeRegistered(resolvedSearchParams.registered)}
     />
   );

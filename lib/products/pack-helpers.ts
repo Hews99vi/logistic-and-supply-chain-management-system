@@ -36,13 +36,7 @@ export function resolveQuantityEntryMode(product: StructuredPackProduct): Quanti
 }
 
 export function buildQuantityModeLabel(product: StructuredPackProduct, options?: { plural?: boolean }) {
-  const mode = resolveQuantityEntryMode(product);
-
-  if (mode === "unit") {
-    return options?.plural === false ? "Unit" : "Units";
-  }
-
-  return options?.plural === false ? "Pack / Case" : "Packs / Cases";
+  return options?.plural === false ? "Selling Unit" : "Selling Units";
 }
 
 export function buildPackInfoLabel(product: StructuredPackProduct) {
@@ -71,25 +65,17 @@ export function buildUnitEquivalentLabel(quantity: number, product: StructuredPa
   }
 
   if (product.packSize === null || product.packSize === undefined || product.packSize <= 0) {
-    return null;
+    return `${quantity} units`;
   }
 
-  const mode = resolveQuantityEntryMode(product);
+  const fullPacks = Math.floor(quantity / product.packSize);
+  const remainder = quantity % product.packSize;
 
-  if (mode === "unit") {
-    const fullPacks = Math.floor(quantity / product.packSize);
-    const remainder = quantity % product.packSize;
-
-    if (fullPacks <= 0) {
-      return `${quantity} units entered`;
-    }
-
-    return remainder > 0
-      ? `${quantity} units ~ ${fullPacks} full packs + ${remainder} units`
-      : `${quantity} units = ${fullPacks} full packs`;
+  if (fullPacks <= 0) {
+    return `${quantity} units`;
   }
 
-  const equivalent = quantity * product.packSize;
-  return `${quantity} x ${product.packSize} = ${equivalent} units equivalent`;
+  return remainder > 0
+    ? `${quantity} units (${fullPacks} full packs + ${remainder} units)`
+    : `${quantity} units (${fullPacks} full packs)`;
 }
-

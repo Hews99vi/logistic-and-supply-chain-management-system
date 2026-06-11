@@ -6,6 +6,7 @@ import type {
   ProductListItem,
   ProductListResponse
 } from "@/features/products/types";
+import { fetchCachedAuthSession, redirectToLoginOnUnauthorized } from "@/features/auth/api/session-cache";
 import { buildProductDisplayNamePreview } from "@/features/products/types";
 
 type ApiEnvelope<T> = {
@@ -27,6 +28,7 @@ async function readEnvelope<T>(response: Response, fallback: string) {
   const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | ApiErrorEnvelope | null;
 
   if (!response.ok) {
+    redirectToLoginOnUnauthorized(response);
     throw new Error(toErrorMessage(payload, fallback));
   }
 
@@ -63,6 +65,9 @@ type ProductCreatePayload = {
   productName: string;
   category?: ProductCategory;
   unitPrice: number;
+  distributorPrice: number;
+  wholesalePrice: number;
+  pieceMargin: number;
   brand?: string;
   productFamily: string;
   variant?: string;
@@ -104,6 +109,9 @@ function toProductPayload(values: ProductFormValues): ProductCreatePayload {
     productName: displayName,
     category: values.category || undefined,
     unitPrice: Number(values.unitPrice),
+    distributorPrice: Number(values.distributorPrice || 0),
+    wholesalePrice: Number(values.wholesalePrice || 0),
+    pieceMargin: Number(values.pieceMargin || 0),
     brand: toOptionalTrimmedText(values.brand),
     productFamily,
     variant: toOptionalTrimmedText(values.variant),
@@ -118,13 +126,7 @@ function toProductPayload(values: ProductFormValues): ProductCreatePayload {
 }
 
 export async function fetchAuthSession() {
-  const response = await fetch("/api/auth/me", {
-    method: "GET",
-    credentials: "include",
-    cache: "no-store"
-  });
-
-  return readEnvelope<AuthSession>(response, "Failed to load current session.");
+  return fetchCachedAuthSession<AuthSession>();
 }
 
 export async function fetchProducts(filters: ProductFilterState) {

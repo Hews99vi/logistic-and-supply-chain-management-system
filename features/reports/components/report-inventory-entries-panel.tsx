@@ -125,7 +125,8 @@ function resolveProduct(row: EditableInventoryRow, products: ProductOption[]) {
     unitSize: selected.unitSize,
     unitMeasure: selected.unitMeasure,
     packSize: selected.packSize,
-    sellingUnit: selected.sellingUnit
+    sellingUnit: selected.sellingUnit,
+    quantityEntryMode: selected.quantityEntryMode
 
   };
 }
@@ -242,8 +243,8 @@ export function ReportInventoryEntriesPanel({
     <Card>
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <CardTitle>Inventory Entries</CardTitle>
-          <CardDescription>Capture loaded, sold, balance, lorry, and variance quantities using each product's configured quantity mode. Backend calculations remain unchanged.</CardDescription>
+          <CardTitle>Route Stock Movement</CardTitle>
+          <CardDescription>Capture loaded, sold, balance, lorry, and variance quantities as selling units, matching Ambewela Flat Data.</CardDescription>
         </div>
 
         <div className="flex gap-2">
@@ -275,7 +276,7 @@ export function ReportInventoryEntriesPanel({
           </Alert>
         ) : null}
 
-        <Alert>Quantities follow each product's configured quantity mode. Unit-equivalent helpers are shown only when the row has structured pack metadata.</Alert>
+        <Alert>Quantities are selling units. Packaging details are shown only as reference for full-case breakdowns.</Alert>
 
         <div className="overflow-x-auto rounded-lg border border-slate-200">
           <table className="min-w-full text-sm">
@@ -307,7 +308,7 @@ export function ReportInventoryEntriesPanel({
               ) : editableRows.length === 0 ? (
                 <tr>
                   <td className="px-3 py-10 text-center text-slate-500" colSpan={12}>
-                    No inventory entries yet. Add a row to start capturing stock movement using each product's quantity mode.
+                    No inventory entries yet. Add a row to start capturing stock movement in selling units.
                   </td>
                 </tr>
               ) : (
@@ -409,6 +410,3 @@ export function ReportInventoryEntriesPanel({
     </Card>
   );
 }
-
-
-

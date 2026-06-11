@@ -55,6 +55,7 @@ export type ProductOption = {
   productCode: string;
   productName: string;
   unitPrice: number;
+  distributorPrice: number;
   unitSize: number | null;
   unitMeasure: string | null;
   packSize: number | null;
@@ -88,6 +89,7 @@ export type ReportDetailEnvelope = {
   cashDenominations: DailyReportDetailDto["cashDenominations"];
   inventoryEntries: DailyReportDetailDto["inventoryEntries"];
   returnDamageEntries: DailyReportDetailDto["returnDamageEntries"];
+  driverDeductions: DailyReportDetailDto["driverDeductions"];
 };
 
 export type AuthSession = {
@@ -96,6 +98,8 @@ export type AuthSession = {
     email?: string;
     profileRole: "admin" | "supervisor" | "driver" | "cashier";
     isActive: boolean;
+    organizationId?: string | null;
+    permissions?: Record<string, Record<string, boolean | undefined> | undefined> | null;
   };
 };
 
@@ -129,6 +133,8 @@ export type ReportInventoryBatchSaveItemInput = {
   loadingQty: number;
   salesQty: number;
   lorryQty: number;
+  salesRevenue?: number;
+  costedSalesQty?: number;
 };
 
 export type ReportReturnDamageBatchSaveItemInput = {
@@ -162,6 +168,7 @@ export type WorkflowActionResult = {
 
 export type ReportWorkspaceTabKey =
   | "overview"
+  | "flat-data"
   | "invoices"
   | "expenses"
   | "cash-check"

@@ -176,9 +176,9 @@ export function ReportFinalSummaryPanel({
         <div className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <SummaryKpiCard title="Gross Sales" value={formatCurrencyLkr(grossSales)} hint="Day sale total" />
-            <SummaryKpiCard title="Sales Returns" value={formatCurrencyLkr(salesReturns)} hint="Return/damage value" />
+            <SummaryKpiCard title="Stock Exceptions" value={formatCurrencyLkr(salesReturns)} hint="Return/damage value" />
             <SummaryKpiCard title="Net Sales" value={formatCurrencyLkr(netSales)} hint="Total sale" />
-            <SummaryKpiCard title="Gross Margin" value={formatCurrencyLkr(reportData.dbMarginValue)} hint={formatPercent(reportData.dbMarginPercent)} />
+            <SummaryKpiCard title="Legacy DB Margin" value={formatCurrencyLkr(reportData.dbMarginValue)} hint={formatPercent(reportData.dbMarginPercent)} />
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -199,7 +199,7 @@ export function ReportFinalSummaryPanel({
                 <CardTitle className="text-4xl">{formatCurrencyLkr(reportData.netProfit)}</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-slate-200">Gross margin value: {formatCurrencyLkr(reportData.dbMarginValue)}</p>
+                <p className="text-sm text-slate-200">Legacy DB margin value: {formatCurrencyLkr(reportData.dbMarginValue)}</p>
               </CardContent>
             </Card>
           </div>
@@ -295,7 +295,6 @@ export function ReportFinalSummaryPanel({
     </section>
   );
 }
-
 
 
 

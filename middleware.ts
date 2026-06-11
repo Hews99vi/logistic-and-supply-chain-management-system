@@ -1,4 +1,4 @@
-﻿import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 type CookieToSet = {
@@ -11,6 +11,7 @@ const PROTECTED_PAGE_PREFIXES = [
   "/dashboard",
   "/reports",
   "/loading-summaries",
+  "/main-inventory",
   "/products",
   "/route-programs",
   "/customers"
@@ -23,6 +24,7 @@ const PROTECTED_API_PREFIXES = [
   "/api/dashboard",
   "/api/expense-categories",
   "/api/loading-summaries",
+  "/api/main-inventory",
   "/api/products",
   "/api/reports",
   "/api/route-programs"
@@ -32,8 +34,6 @@ const PUBLIC_API_PREFIXES = [
   "/api/auth/signup",
   "/api/health"
 ] as const;
-
-const PUBLIC_AUTH_PAGES = new Set(["/login", "/signup"]);
 
 function matchesPrefix(pathname: string, prefix: string) {
   return pathname === prefix || pathname.startsWith(`${prefix}/`);
@@ -76,30 +76,38 @@ export async function middleware(request: NextRequest) {
     }
   });
 
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
-
   const { pathname } = request.nextUrl;
   const isApi = pathname.startsWith("/api/");
 
-  if (!user && isProtectedApi(pathname)) {
-    return NextResponse.json(
-      { error: { code: "UNAUTHORIZED", message: "Authentication required." } },
-      { status: 401 }
-    );
+  if (isApi) {
+    if (isProtectedApi(pathname)) {
+      const {
+        data: { user }
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        return NextResponse.json(
+          { error: { code: "UNAUTHORIZED", message: "Authentication required." } },
+          { status: 401 }
+        );
+      }
+    }
+
+    return response;
   }
+
+  if (!isProtectedPage(pathname)) {
+    return response;
+  }
+
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
 
   if (!user && isProtectedPage(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("redirectTo", pathname);
-    return NextResponse.redirect(url);
-  }
-
-  if (user && !isApi && PUBLIC_AUTH_PAGES.has(pathname)) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
     return NextResponse.redirect(url);
   }
 

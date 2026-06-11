@@ -16,6 +16,9 @@ export type AuthenticatedContext = {
     full_name: string | null;
     phone: string | null;
   };
+  organization: {
+    id: string;
+  } | null;
 };
 
 type AuthProfileRow = {
@@ -27,6 +30,10 @@ type AuthProfileRow = {
 };
 
 type AuthProfile = AuthenticatedContext["profile"];
+
+type AuthOrganizationMembershipRow = {
+  organization_id: string;
+};
 
 function unauthorizedResponse(message = "Authentication required.") {
   return NextResponse.json(
@@ -72,6 +79,31 @@ async function getCurrentProfile(userId: string): Promise<AuthProfile | null> {
   };
 }
 
+async function getCurrentOrganization(userId: string): Promise<AuthenticatedContext["organization"]> {
+  const supabase = await createSupabaseServerClient();
+  const membershipQuery = supabase
+    .from("organization_memberships")
+    .select("organization_id")
+    .eq("user_id", userId)
+    .eq("status", "ACTIVE")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  const { data, error } = (await membershipQuery) as {
+    data: AuthOrganizationMembershipRow | null;
+    error: { message: string } | null;
+  };
+
+  if (error || !data) {
+    return null;
+  }
+
+  return {
+    id: data.organization_id
+  };
+}
+
 export async function getCurrentUser() {
   const supabase = await createSupabaseServerClient();
   const {
@@ -108,7 +140,33 @@ export async function requireAuth() {
   return {
     context: {
       user,
-      profile
+      profile,
+      organization: null
+    } satisfies AuthenticatedContext,
+    response: null
+  };
+}
+
+export async function requireAppAccess() {
+  const auth = await requireAuth();
+
+  if (auth.response || !auth.context) {
+    return auth;
+  }
+
+  const organization = await getCurrentOrganization(auth.context.user.id);
+
+  if (!organization) {
+    return {
+      context: null,
+      response: forbiddenResponse("Active organization membership required.")
+    };
+  }
+
+  return {
+    context: {
+      ...auth.context,
+      organization
     } satisfies AuthenticatedContext,
     response: null
   };

@@ -1,6 +1,5 @@
-import { requireAuth } from "@/lib/auth/helpers";
+import { requireFeaturePermission } from "@/lib/auth/permissions";
 import { errorResponse, fromPostgrestError, successResponse } from "@/lib/db/response";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getPaginationRange, uuidSchema } from "@/lib/validation/common";
 import {
@@ -103,6 +102,7 @@ async function resolveActiveOrganizationId(userId: string) {
     .select("organization_id")
     .eq("user_id", userId)
     .eq("status", "ACTIVE")
+    .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle()) as {
     data: MembershipLookup | null;
@@ -275,7 +275,7 @@ async function getLoadingSummaryItemCompleteness(summaryId: string) {
 
 export class LoadingSummaryService {
   static async list(request: Request) {
-    const auth = await requireAuth();
+    const auth = await requireFeaturePermission("loading_summaries", "view");
     if (auth.response || !auth.context) {
       return auth.response;
     }
@@ -364,7 +364,7 @@ export class LoadingSummaryService {
   }
 
   static async create(request: Request) {
-    const auth = await requireAuth();
+    const auth = await requireFeaturePermission("loading_summaries", "create");
     if (auth.response || !auth.context) {
       return auth.response;
     }
@@ -402,25 +402,14 @@ export class LoadingSummaryService {
       return successResponse(mapLoadingSummary(existingRouteDaySummary.data));
     }
 
-    // Authorization and organization scoping are enforced before this write.
-    // Using the admin client here avoids brittle insert-time RLS or trigger
-    // failures on initial route-day creation, matching the daily report create flow.
-    const supabase = createSupabaseAdminClient();
-    const { data, error } = (await supabase
-      .from("daily_reports")
-      .insert({
-        report_date: parsed.data.reportDate,
-        route_program_id: parsed.data.routeProgramId,
-        prepared_by: auth.context.user.id,
-        staff_name: parsed.data.staffName,
-        territory_name_snapshot: routeProgram.data.territory_name,
-        route_name_snapshot: routeProgram.data.route_name,
-        remarks: parsed.data.remarks ?? null,
-        loading_notes: parsed.data.loadingNotes ?? null,
-        status: "draft"
-      } as never)
-      .select(LOADING_SUMMARY_SELECT)
-      .single()) as {
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = (await (supabase as any).rpc("create_loading_summary", {
+      p_report_date: parsed.data.reportDate,
+      p_route_program_id: parsed.data.routeProgramId,
+      p_staff_name: parsed.data.staffName,
+      p_remarks: parsed.data.remarks ?? null,
+      p_loading_notes: parsed.data.loadingNotes ?? null
+    })) as {
       data: DailyReportLoadingRow | null;
       error: Parameters<typeof fromPostgrestError>[0] | null;
     };
@@ -446,7 +435,7 @@ export class LoadingSummaryService {
   }
 
   static async getById(summaryId: string) {
-    const auth = await requireAuth();
+    const auth = await requireFeaturePermission("loading_summaries", "view");
     if (auth.response || !auth.context) {
       return auth.response;
     }
@@ -473,7 +462,7 @@ export class LoadingSummaryService {
   }
 
   static async update(summaryId: string, request: Request) {
-    const auth = await requireAuth();
+    const auth = await requireFeaturePermission("loading_summaries", "edit");
     if (auth.response || !auth.context) {
       return auth.response;
     }
@@ -543,7 +532,7 @@ export class LoadingSummaryService {
   }
 
   static async finalize(summaryId: string, request: Request) {
-    const auth = await requireAuth();
+    const auth = await requireFeaturePermission("loading_summaries", "submit");
     if (auth.response || !auth.context) {
       return auth.response;
     }
@@ -610,16 +599,10 @@ export class LoadingSummaryService {
     }
 
     const supabase = await createSupabaseServerClient();
-    const { data, error } = (await supabase
-      .from("daily_reports")
-      .update({
-        loading_completed_at: new Date().toISOString(),
-        loading_completed_by: auth.context.user.id,
-        ...(parsed.data.loadingNotes !== undefined ? { loading_notes: parsed.data.loadingNotes } : {})
-      } as never)
-      .eq("id", parsedId.data)
-      .select(LOADING_SUMMARY_SELECT)
-      .single()) as {
+    const { data, error } = (await (supabase as any).rpc("finalize_loading_summary", {
+      p_summary_id: parsedId.data,
+      p_loading_notes: parsed.data.loadingNotes ?? null
+    })) as {
       data: DailyReportLoadingRow | null;
       error: Parameters<typeof fromPostgrestError>[0] | null;
     };
@@ -631,10 +614,6 @@ export class LoadingSummaryService {
     return successResponse(mapLoadingSummary(data as DailyReportLoadingRow));
   }
 }
-
-
-
-
 
 
 

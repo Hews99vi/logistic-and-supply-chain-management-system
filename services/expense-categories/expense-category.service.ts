@@ -1,4 +1,4 @@
-import { requireAuth, requireRole } from "@/lib/auth/helpers";
+import { requireFeaturePermission } from "@/lib/auth/permissions";
 import { errorResponse, fromPostgrestError, successResponse } from "@/lib/db/response";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getPaginationRange, uuidSchema } from "@/lib/validation/common";
@@ -21,7 +21,7 @@ const EXPENSE_CATEGORY_SELECT = "id, category_name, is_system, is_active, create
 
 export class ExpenseCategoryService {
   static async listExpenseCategories(request: Request) {
-    const auth = await requireAuth();
+    const auth = await requireFeaturePermission("date_sheet", "view");
     if (auth.response) {
       return auth.response;
     }
@@ -33,13 +33,13 @@ export class ExpenseCategoryService {
       return errorResponse(422, "VALIDATION_ERROR", "Invalid expense category query parameters.", parsed.error.flatten());
     }
 
-    const { page, pageSize, search, isActive, isSystem } = parsed.data;
+    const { page, pageSize, search, isActive, isSystem, includeCount } = parsed.data;
     const { from, to } = getPaginationRange(page, pageSize);
     const supabase = await createSupabaseServerClient();
 
     let query = supabase
       .from("expense_categories")
-      .select(EXPENSE_CATEGORY_SELECT, { count: "exact" })
+      .select(EXPENSE_CATEGORY_SELECT, includeCount ? { count: "exact" } : undefined)
       .order("category_name", { ascending: true })
       .range(from, to);
 
@@ -69,12 +69,12 @@ export class ExpenseCategoryService {
       items: data ?? [],
       page,
       pageSize,
-      total: count ?? 0
+      total: includeCount ? count ?? 0 : data?.length ?? 0
     });
   }
 
   static async getExpenseCategoryById(expenseCategoryId: string) {
-    const auth = await requireAuth();
+    const auth = await requireFeaturePermission("date_sheet", "view");
     if (auth.response) {
       return auth.response;
     }
@@ -106,7 +106,7 @@ export class ExpenseCategoryService {
   }
 
   static async createExpenseCategory(request: Request) {
-    const auth = await requireRole(["admin", "supervisor"]);
+    const auth = await requireFeaturePermission("date_sheet", "edit");
     if (auth.response) {
       return auth.response;
     }
@@ -140,7 +140,7 @@ export class ExpenseCategoryService {
   }
 
   static async updateExpenseCategory(expenseCategoryId: string, request: Request) {
-    const auth = await requireRole(["admin", "supervisor"]);
+    const auth = await requireFeaturePermission("date_sheet", "edit");
     if (auth.response) {
       return auth.response;
     }
@@ -192,7 +192,7 @@ export class ExpenseCategoryService {
   }
 
   static async deactivateExpenseCategory(expenseCategoryId: string) {
-    const auth = await requireRole(["admin", "supervisor"]);
+    const auth = await requireFeaturePermission("date_sheet", "edit");
     if (auth.response) {
       return auth.response;
     }

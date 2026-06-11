@@ -18,6 +18,7 @@ export function useLoadingSummaryWorkspace(summaryId: string) {
   const [summary, setSummary] = useState<LoadingSummaryListItem | null>(null);
   const [role, setRole] = useState<"admin" | "supervisor" | "driver" | "cashier" | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [permissions, setPermissions] = useState<Record<string, Record<string, boolean | undefined> | undefined> | null>(null);
 
   const [draftForm, setDraftForm] = useState({
     reportDate: "",
@@ -37,6 +38,7 @@ export function useLoadingSummaryWorkspace(summaryId: string) {
       ]);
 
       setRole(session.user.profileRole);
+      setPermissions(session.user.permissions ?? null);
       setCurrentUserId(session.user.id);
       setSummary(detail);
       setDraftForm({
@@ -64,13 +66,14 @@ export function useLoadingSummaryWorkspace(summaryId: string) {
   const canAccessAsManager = useMemo(() => {
     if (!summary || !role || !currentUserId) return false;
     if (summary.status !== "draft") return false;
+    if (!permissions?.loading_summaries?.edit) return false;
 
     if (role === "driver") {
       return summary.preparedBy === currentUserId;
     }
 
-    return role === "admin" || role === "supervisor";
-  }, [currentUserId, role, summary]);
+    return true;
+  }, [currentUserId, permissions, role, summary]);
 
   const canEditMorningLoading = useMemo(() => {
     if (!summary) return false;

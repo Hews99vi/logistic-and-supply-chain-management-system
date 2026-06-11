@@ -13,13 +13,15 @@ import {
   Settings,
   Truck,
   UserCog,
-  Users
+  Users,
+  Warehouse
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { fetchCachedAuthSession } from "@/features/auth/api/session-cache";
 
-type NavKey = "dashboard" | "reports" | "loading-summaries" | "products" | "route-programs" | "customers";
-type SidebarHref = "/dashboard" | "/reports" | "/loading-summaries" | "/products" | "/route-programs" | "/customers";
+type NavKey = "dashboard" | "reports" | "loading-summaries" | "products" | "route-programs" | "customers" | "main-inventory";
+type SidebarHref = "/dashboard" | "/reports" | "/loading-summaries" | "/products" | "/route-programs" | "/customers" | "/main-inventory";
 
 type SidebarItem = {
   key: NavKey | "other";
@@ -27,22 +29,25 @@ type SidebarItem = {
   label: string;
   icon: ComponentType<{ className?: string }>;
   ready: boolean;
+  feature?: string;
 };
 
 const items: SidebarItem[] = [
-  { key: "dashboard", href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, ready: true },
-  { key: "reports", href: "/reports", label: "Daily Reports", icon: ClipboardList, ready: true },
-  { key: "loading-summaries", href: "/loading-summaries", label: "Loading Summaries", icon: Truck, ready: true },
-  { key: "products", href: "/products", label: "Products", icon: Boxes, ready: true },
-  { key: "route-programs", href: "/route-programs", label: "Route Programs", icon: Route, ready: true },
-  { key: "customers", href: "/customers", label: "Customers", icon: Users, ready: true },
-  { key: "other", label: "Analytics", icon: BarChart3, ready: false },
-  { key: "other", label: "Users", icon: UserCog, ready: false },
-  { key: "other", label: "Settings", icon: Settings, ready: false }
+  { key: "dashboard", href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, ready: true, feature: "dashboard" },
+  { key: "reports", href: "/reports", label: "Daily Reports", icon: ClipboardList, ready: true, feature: "daily_reports" },
+  { key: "loading-summaries", href: "/loading-summaries", label: "Loading Summaries", icon: Truck, ready: true, feature: "loading_summaries" },
+  { key: "main-inventory", href: "/main-inventory", label: "Main Inventory", icon: Warehouse, ready: true, feature: "main_inventory" },
+  { key: "products", href: "/products", label: "Products", icon: Boxes, ready: true, feature: "products" },
+  { key: "route-programs", href: "/route-programs", label: "Route Programs", icon: Route, ready: true, feature: "route_programs" },
+  { key: "customers", href: "/customers", label: "Customers", icon: Users, ready: true, feature: "customers" },
+  { key: "other", label: "Analytics", icon: BarChart3, ready: false, feature: "analytics" },
+  { key: "other", label: "Users", icon: UserCog, ready: false, feature: "users" },
+  { key: "other", label: "Settings", icon: Settings, ready: false, feature: "settings" }
 ];
 
 export function DashboardSidebar({ activeKey }: { activeKey: NavKey }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [permissions, setPermissions] = useState<Record<string, Record<string, boolean | undefined> | undefined> | null>(null);
 
   useEffect(() => {
     if (!mobileNavOpen) return;
@@ -64,7 +69,38 @@ export function DashboardSidebar({ activeKey }: { activeKey: NavKey }) {
     };
   }, [mobileNavOpen]);
 
-  const activeItem = items.find((item) => item.ready && item.key === activeKey);
+  useEffect(() => {
+    let mounted = true;
+
+    void fetchCachedAuthSession<{
+      user: {
+        permissions?: Record<string, Record<string, boolean | undefined> | undefined> | null;
+      };
+    }>()
+      .then((session) => {
+        if (mounted) {
+          setPermissions(session.user.permissions ?? null);
+        }
+      })
+      .catch(() => {
+        if (mounted) {
+          setPermissions(null);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const visibleItems = items.filter((item) => {
+    if (permissions === null) return item.ready;
+    if (!item.feature) return true;
+    if (!item.ready) return Boolean(permissions?.[item.feature]?.view);
+    return Boolean(permissions?.[item.feature]?.view);
+  });
+
+  const activeItem = visibleItems.find((item) => item.ready && item.key === activeKey);
 
   const renderItem = (item: SidebarItem, onNavigate?: () => void) => {
     const Icon = item.icon;
@@ -101,7 +137,7 @@ export function DashboardSidebar({ activeKey }: { activeKey: NavKey }) {
     }
 
     return (
-      <Link key={item.label} href={item.href} className={baseClassName} onClick={onNavigate}>
+      <Link key={item.label} href={item.href as any} className={baseClassName} onClick={onNavigate}>
         {content}
       </Link>
     );
@@ -157,7 +193,7 @@ export function DashboardSidebar({ activeKey }: { activeKey: NavKey }) {
             </div>
 
             <nav className="mt-8 space-y-1">
-              {items.map((item) => renderItem(item, () => setMobileNavOpen(false)))}
+              {visibleItems.map((item) => renderItem(item, () => setMobileNavOpen(false)))}
             </nav>
           </aside>
         </div>
@@ -170,10 +206,9 @@ export function DashboardSidebar({ activeKey }: { activeKey: NavKey }) {
         </div>
 
         <nav className="mt-8 space-y-1">
-          {items.map((item) => renderItem(item))}
+          {visibleItems.map((item) => renderItem(item))}
         </nav>
       </aside>
     </>
   );
 }
-

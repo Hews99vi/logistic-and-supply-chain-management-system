@@ -114,6 +114,7 @@ async function resolveActiveOrganizationId(userId: string) {
     .select("organization_id")
     .eq("user_id", userId)
     .eq("status", "ACTIVE")
+    .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle()) as {
     data: MembershipLookup | null;
@@ -371,29 +372,45 @@ export class LoadingSummaryItemService {
       lorryQty: item.lorryQty
     }));
 
-    const { data, error } = (await (supabase as never as {
+    const rpcParams = {
+      target_daily_report_id: parsedId.data,
+      input_entries: rpcPayload
+    };
+
+    const loadingItemsSaveResult = (await (supabase as never as {
       rpc: (name: string, params: Record<string, unknown>) => Promise<{
         data: InventoryRow[] | null;
         error: Parameters<typeof fromPostgrestError>[0] | null;
       }>;
-    }).rpc("save_report_inventory_entries", {
-      target_daily_report_id: parsedId.data,
-      input_entries: rpcPayload
-    })) as {
+    }).rpc("save_loading_summary_items", rpcParams)) as {
       data: InventoryRow[] | null;
       error: Parameters<typeof fromPostgrestError>[0] | null;
     };
 
-    if (error) {
-      return fromPostgrestError(error);
+    const shouldFallbackToReportInventoryRpc =
+      loadingItemsSaveResult.error?.code === "42883"
+      || loadingItemsSaveResult.error?.message?.toLowerCase().includes("save_loading_summary_items") === true;
+
+    const saveResult = shouldFallbackToReportInventoryRpc
+      ? (await (supabase as never as {
+        rpc: (name: string, params: Record<string, unknown>) => Promise<{
+          data: InventoryRow[] | null;
+          error: Parameters<typeof fromPostgrestError>[0] | null;
+        }>;
+      }).rpc("save_report_inventory_entries", rpcParams)) as {
+        data: InventoryRow[] | null;
+        error: Parameters<typeof fromPostgrestError>[0] | null;
+      }
+      : loadingItemsSaveResult;
+
+    if (saveResult.error) {
+      return fromPostgrestError(saveResult.error);
     }
 
     return successResponse({
-      items: (data ?? []).map(mapItem)
+      items: (saveResult.data ?? []).map(mapItem)
     });
   }
 }
-
-
 
 

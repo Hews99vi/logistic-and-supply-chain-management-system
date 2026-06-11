@@ -191,7 +191,7 @@ export function LoadingSummaryPrintView({ summaryId }: { summaryId: string }) {
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Operations / Route Product Movement</p>
                   <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-slate-900">Daily Loading & Return Reconciliation Sheet</h2>
                   <p className="mt-1 text-sm text-slate-600">Summary ID: {summary.id}</p>
-                  <p className="mt-2 text-xs text-slate-500">Quantities follow each product's configured quantity entry mode. The same route sheet is used in the morning and revisited for evening reconciliation.</p>
+                  <p className="mt-2 text-xs text-slate-500">Quantities are recorded as selling units, matching Ambewela Flat Data. The same route sheet is used in the morning and revisited for evening reconciliation.</p>
                 </div>
 
                 <div className="text-right">

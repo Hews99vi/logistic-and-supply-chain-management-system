@@ -3,20 +3,30 @@ import { z } from "zod";
 import { uuidSchema } from "@/lib/validation/common";
 import { optionalLineNoSchema } from "@/lib/validation/report-line-item-common";
 
-const packQuantitySchema = z.number().int().min(0);
+const unitQuantitySchema = z.number().int().min(0);
+const moneySnapshotSchema = z.number().nonnegative();
 
 function withValidInventoryQuantities<T extends z.ZodTypeAny>(schema: T) {
   return schema.superRefine((value: z.infer<T>, ctx) => {
     const candidate = value as {
       loadingQty?: number;
       salesQty?: number;
+      costedSalesQty?: number;
     };
 
     if ((candidate.salesQty ?? 0) > (candidate.loadingQty ?? 0)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "salesQty cannot exceed loadingQty. Quantities follow the product's configured quantity mode.",
+        message: "salesQty cannot exceed loadingQty. Quantities are recorded as selling units.",
         path: ["salesQty"]
+      });
+    }
+
+    if (candidate.costedSalesQty !== undefined && candidate.costedSalesQty > (candidate.salesQty ?? 0)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "costedSalesQty cannot exceed salesQty.",
+        path: ["costedSalesQty"]
       });
     }
   });
@@ -24,9 +34,11 @@ function withValidInventoryQuantities<T extends z.ZodTypeAny>(schema: T) {
 
 const inventoryEntryBaseObjectSchema = z.object({
   productId: uuidSchema,
-  loadingQty: packQuantitySchema.default(0),
-  salesQty: packQuantitySchema.default(0),
-  lorryQty: packQuantitySchema.default(0)
+  loadingQty: unitQuantitySchema.default(0),
+  salesQty: unitQuantitySchema.default(0),
+  lorryQty: unitQuantitySchema.default(0),
+  salesRevenue: moneySnapshotSchema.optional(),
+  costedSalesQty: unitQuantitySchema.optional()
 });
 
 export const reportInventoryEntryCreateSchema = withValidInventoryQuantities(inventoryEntryBaseObjectSchema.extend({
@@ -36,9 +48,11 @@ export const reportInventoryEntryCreateSchema = withValidInventoryQuantities(inv
 export const reportInventoryEntryUpdateSchema = z.object({
   lineNo: optionalLineNoSchema,
   productId: uuidSchema.optional(),
-  loadingQty: packQuantitySchema.optional(),
-  salesQty: packQuantitySchema.optional(),
-  lorryQty: packQuantitySchema.optional()
+  loadingQty: unitQuantitySchema.optional(),
+  salesQty: unitQuantitySchema.optional(),
+  lorryQty: unitQuantitySchema.optional(),
+  salesRevenue: moneySnapshotSchema.optional(),
+  costedSalesQty: unitQuantitySchema.optional()
 }).refine((value) => Object.keys(value).length > 0, {
   message: "At least one inventory entry field must be provided."
 });
@@ -82,4 +96,3 @@ export type ReportInventoryEntryCreateInput = z.infer<typeof reportInventoryEntr
 export type ReportInventoryEntryUpdateInput = z.infer<typeof reportInventoryEntryUpdateSchema>;
 export type ReportInventoryEntryBatchItemInput = z.infer<typeof reportInventoryEntryBatchItemSchema>;
 export type ReportInventoryEntryBatchSaveInput = z.infer<typeof reportInventoryEntryBatchSaveSchema>;
-

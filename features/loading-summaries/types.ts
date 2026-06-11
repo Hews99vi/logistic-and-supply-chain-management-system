@@ -96,5 +96,7 @@ export type AuthSession = {
     email?: string;
     profileRole: "admin" | "supervisor" | "driver" | "cashier";
     isActive: boolean;
+    organizationId?: string | null;
+    permissions?: Record<string, Record<string, boolean | undefined> | undefined> | null;
   };
 };

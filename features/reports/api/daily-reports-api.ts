@@ -28,6 +28,7 @@ import type {
   RouteProgramFilterOption,
   WorkflowActionResult
 } from "@/features/reports/types";
+import { fetchCachedAuthSession, redirectToLoginOnUnauthorized } from "@/features/auth/api/session-cache";
 
 type RouteProgramsApiResponse = {
   items: Array<{
@@ -53,6 +54,7 @@ type ProductsApiResponse = {
     product_name: string;
     display_name?: string | null;
     unit_price: number;
+    distributor_price?: number;
     unit_size?: number | null;
     unit_measure?: string | null;
     pack_size?: number | null;
@@ -71,6 +73,7 @@ async function readEnvelope<T>(response: Response, fallback: string) {
   const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | ApiErrorEnvelope | null;
 
   if (!response.ok) {
+    redirectToLoginOnUnauthorized(response);
     throw new Error(toErrorMessage(payload, fallback));
   }
 
@@ -114,13 +117,7 @@ async function postWorkflow<T>(url: string, body?: unknown) {
 }
 
 export async function fetchAuthSession() {
-  const response = await fetch("/api/auth/me", {
-    method: "GET",
-    credentials: "include",
-    cache: "no-store"
-  });
-
-  return readEnvelope<AuthSession>(response, "Failed to load current session.");
+  return fetchCachedAuthSession<AuthSession>();
 }
 
 export async function createDailyReport(payload: DailyReportCreateInput) {
@@ -160,7 +157,7 @@ export async function fetchReportsSummary(filters: ReportsFilterState) {
 }
 
 export async function fetchRouteFilterOptions() {
-  const response = await fetch("/api/route-programs?page=1&pageSize=100&isActive=true", {
+  const response = await fetch("/api/route-programs?page=1&pageSize=100&isActive=true&includeCount=false", {
     method: "GET",
     credentials: "include",
     cache: "no-store"
@@ -178,7 +175,7 @@ export async function fetchRouteFilterOptions() {
 }
 
 export async function fetchExpenseCategoryOptions() {
-  const response = await fetch("/api/expense-categories?page=1&pageSize=100&isActive=true", {
+  const response = await fetch("/api/expense-categories?page=1&pageSize=100&isActive=true&includeCount=false", {
     method: "GET",
     credentials: "include",
     cache: "no-store"
@@ -197,26 +194,36 @@ export async function fetchExpenseCategoryOptions() {
 }
 
 export async function fetchProductOptions() {
-  const response = await fetch("/api/products?page=1&pageSize=100&isActive=true", {
-    method: "GET",
-    credentials: "include",
-    cache: "no-store"
-  });
+  const pageSize = 100;
+  const options: ProductOption[] = [];
 
-  const data = await readEnvelope<ProductsApiResponse>(response, "Failed to load products.");
+  for (let page = 1; ; page += 1) {
+    const response = await fetch(`/api/products?page=${page}&pageSize=${pageSize}&isActive=true&includeCount=false`, {
+      method: "GET",
+      credentials: "include",
+      cache: "no-store"
+    });
 
-  const options: ProductOption[] = data.items.map((item) => ({
-    id: item.id,
-    productCode: item.product_code,
-    productName: item.display_name ?? item.product_name,
-    unitPrice: item.unit_price,
-    unitSize: item.unit_size ?? null,
-    unitMeasure: item.unit_measure ?? null,
-    packSize: item.pack_size ?? null,
-    sellingUnit: item.selling_unit ?? null,
-    quantityEntryMode: item.quantity_entry_mode === "unit" ? "unit" : "pack",
-    isActive: item.is_active
-  }));
+    const data = await readEnvelope<ProductsApiResponse>(response, "Failed to load products.");
+
+    options.push(...data.items.map((item) => ({
+      id: item.id,
+      productCode: item.product_code,
+      productName: item.display_name ?? item.product_name,
+      unitPrice: item.unit_price,
+      distributorPrice: item.distributor_price ?? 0,
+      unitSize: item.unit_size ?? null,
+      unitMeasure: item.unit_measure ?? null,
+      packSize: item.pack_size ?? null,
+      sellingUnit: item.selling_unit ?? null,
+      quantityEntryMode: item.quantity_entry_mode === "unit" ? "unit" as const : "pack" as const,
+      isActive: item.is_active
+    })));
+
+    if (data.items.length < pageSize) {
+      break;
+    }
+  }
 
   return options;
 }
@@ -345,6 +352,31 @@ export async function saveReportInventoryEntries(reportId: string, items: Report
   );
 
   return data.items;
+}
+
+export async function importFlatDataReport(reportId: string, payload: {
+  invoiceEntries: ReportInvoiceBatchSaveItemInput[];
+  inventorySales: Array<{
+    productId: string;
+    salesQty: number;
+    salesRevenue: number;
+    costedSalesQty: number;
+  }>;
+  returnDamageEntries: ReportReturnDamageBatchSaveItemInput[];
+  deliveredBillCount: number;
+  allowOverwrite: boolean;
+}) {
+  const response = await fetch(`/api/reports/${reportId}/flat-data-import`, {
+    method: "POST",
+    credentials: "include",
+    cache: "no-store",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  return readEnvelope<unknown>(response, "Failed to import Flat Data.");
 }
 
 export async function fetchReportReturnDamageEntries(reportId: string) {
@@ -553,15 +585,33 @@ export async function reopenReport(reportId: string) {
   return postWorkflow<WorkflowActionResult>(`/api/reports/${reportId}/reopen`);
 }
 
+export async function resolveDriverDeduction(
+  reportId: string,
+  deductionId: string,
+  payload: { status: "approved" | "waived" | "settled"; reason?: string }
+) {
+  const response = await fetch(`/api/reports/${reportId}/driver-deductions/${deductionId}`, {
+    method: "PATCH",
+    credentials: "include",
+    cache: "no-store",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
 
+  return readEnvelope<unknown>(response, "Failed to resolve driver deduction.");
+}
 
+export async function deleteReport(reportId: string) {
+  const response = await fetch(`/api/reports/${reportId}`, {
+    method: "DELETE",
+    credentials: "include",
+    cache: "no-store"
+  });
 
-
-
-
-
-
-
+  return readEnvelope<{ id: string; deleted: boolean }>(response, "Failed to delete report.");
+}
 
 
 

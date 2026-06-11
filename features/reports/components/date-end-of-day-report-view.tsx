@@ -23,6 +23,7 @@ import {
 import { DailyReportStatusBadge } from "@/features/reports/components/daily-report-status-badge";
 import { buildReportSubmitChecklist } from "@/features/reports/lib/report-submit-checklist";
 import { ReportCashAuditPanel } from "@/features/reports/components/report-cash-audit-panel";
+import { ReportDriverDeductionsPanel } from "@/features/reports/components/report-driver-deductions-panel";
 import { ReportExpenseEntriesPanel } from "@/features/reports/components/report-expense-entries-panel";
 import { ReportInvoiceEntriesPanel } from "@/features/reports/components/report-invoice-entries-panel";
 import { useReportWorkspace } from "@/features/reports/hooks/use-report-workspace";
@@ -205,6 +206,7 @@ export function DateEndOfDayReportView({ reportId }: { reportId: string }) {
     canSubmit,
     canApprove,
     canReject,
+    canResolveDeductions,
     canReopen,
     reload,
     actions
@@ -444,11 +446,19 @@ export function DateEndOfDayReportView({ reportId }: { reportId: string }) {
   };
 
   const canEditDateSheet = canSaveDraft && status === "draft";
+  const flatDataImported = useMemo(() => {
+    return Boolean(
+      detail?.invoiceEntries.length
+      || detail?.inventoryEntries.some((row) => row.salesQty > 0 || row.salesRevenueSnapshot > 0)
+    );
+  }, [detail?.inventoryEntries, detail?.invoiceEntries.length]);
+
   const submitChecklist = useMemo(() => {
     if (!report || !form) return [];
     return buildReportSubmitChecklist({
       routeNameSnapshot: report.routeNameSnapshot,
       staffName: form.staffName.trim(),
+      loadingCompletedAt: report.loadingCompletedAt,
       totalBillCount: parseNonNegativeInteger(form.totalBillCount) ?? 0,
       deliveredBillCount: parseNonNegativeInteger(form.deliveredBillCount) ?? 0,
       cancelledBillCount: parseNonNegativeInteger(form.cancelledBillCount) ?? 0,
@@ -457,10 +467,14 @@ export function DateEndOfDayReportView({ reportId }: { reportId: string }) {
       cashInHand: parseNonNegativeNumber(form.cashInHand) ?? 0,
       cashPhysicalTotal: report.cashPhysicalTotal,
       invoiceEntriesCount: invoiceRows.length,
+      inventoryEntriesCount: detail?.inventoryEntries.length ?? 0,
+      invalidInventoryCount: detail?.inventoryEntries.filter((row) => row.salesQty > row.loadingQty || row.lorryQty < 0).length ?? 0,
+      positiveVarianceCount: detail?.inventoryEntries.filter((row) => row.varianceQty > 0).length ?? 0,
+      unresolvedMissingStockCount: detail?.driverDeductions.filter((row) => row.status === "pending").length ?? 0,
       denominationRowCount: cashRows.length,
       denominationPositiveNoteCount: cashRows.reduce((count, row) => count + (row.noteCount > 0 ? 1 : 0), 0)
     });
-  }, [cashRows, form, invoiceRows, report]);
+  }, [cashRows, detail?.driverDeductions, detail?.inventoryEntries, form, invoiceRows, report]);
   const submitBlockingFailures = submitChecklist.filter((item) => item.blocking && !item.passed);
   const canSubmitFromDateSheet = canSubmit && submitBlockingFailures.length === 0;
 
@@ -478,6 +492,7 @@ export function DateEndOfDayReportView({ reportId }: { reportId: string }) {
     { id: "date-expenses", label: "Expenses" },
     { id: "date-cash", label: "Cash Check" },
     { id: "date-bills", label: "Bill Counts" },
+    { id: "date-deductions", label: "Deductions" },
     { id: "date-summary", label: "Summary" },
     { id: "date-actions", label: "Actions" }
   ];
@@ -549,12 +564,25 @@ export function DateEndOfDayReportView({ reportId }: { reportId: string }) {
 
           {report!.loadingCompletedAt ? (
             <Alert className="border-emerald-200 bg-emerald-50 text-emerald-700 print:hidden">
-              Morning loading was finalized on {formatDate(report!.loadingCompletedAt)}. Product movements for this route-day continue to use each product's configured quantity mode across loading, inventory, and return workflows.
+              Morning loading was finalized on {formatDate(report!.loadingCompletedAt)}. Product movements for this route-day use selling-unit quantities across loading, inventory, and return workflows.
             </Alert>
           ) : (
             <Alert className="border-amber-200 bg-amber-50 text-amber-800 print:hidden">
               Morning loading has not been finalized yet. You can still complete the DATE sheet, but operationally this route-day has not been
               closed from the loading side.
+            </Alert>
+          )}
+
+          {flatDataImported ? (
+            <Alert className="border-emerald-200 bg-emerald-50 text-emerald-700 print:hidden">
+              Flat Data imported. Continue with cash, cheques, bills, expenses, deduction resolution, and final submit.
+            </Alert>
+          ) : (
+            <Alert className="border-amber-200 bg-amber-50 text-amber-800 print:hidden">
+              Flat Data has not been imported yet. Upload it from the Route Day Sheet before final submission, unless this route-day is being completed fully manually.
+              <Button asChild variant="outline" size="sm" className="ml-0 mt-3 bg-white sm:ml-3 sm:mt-0">
+                <Link href={`/loading-summaries/${report!.loadingSummaryId}`}>Open Route Day Sheet</Link>
+              </Button>
             </Alert>
           )}
           {sheetError ? <Alert variant="destructive" className="print:hidden">{sheetError}</Alert> : null}
@@ -850,9 +878,22 @@ export function DateEndOfDayReportView({ reportId }: { reportId: string }) {
             </Card>
           </section>
 
+          <section id="date-deductions" className="scroll-mt-24 space-y-4 print:break-inside-avoid">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">9. Variance & Driver Deduction Block</h2>
+              <p className="text-sm text-slate-500">Resolve missing lorry stock before DATE submit.</p>
+            </div>
+            <ReportDriverDeductionsPanel
+              reportId={report!.id}
+              deductions={detail?.driverDeductions ?? []}
+              canResolve={canResolveDeductions}
+              onResolved={reload}
+            />
+          </section>
+
           <section id="date-actions" className="scroll-mt-24 space-y-4 print:hidden">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">9. Final Actions</h2>
+              <h2 className="text-lg font-bold text-slate-900">10. Final Actions</h2>
               <p className="text-sm text-slate-500">Save, submit, or review the DATE closing sheet according to the current workflow state.</p>
             </div>
 
@@ -958,14 +999,6 @@ export function DateEndOfDayReportView({ reportId }: { reportId: string }) {
           </div>      </AppShell>
   );
 }
-
-
-
-
-
-
-
-
 
 
 

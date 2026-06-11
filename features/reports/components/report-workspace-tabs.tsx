@@ -4,12 +4,13 @@ import { cn } from "@/lib/utils";
 import type { ReportWorkspaceTabKey } from "@/features/reports/types";
 
 const tabs: Array<{ key: ReportWorkspaceTabKey; label: string }> = [
-  { key: "overview", label: "Overview" },
+  { key: "overview", label: "Route-Day Overview" },
+  { key: "flat-data", label: "Flat Data" },
   { key: "invoices", label: "Invoices" },
   { key: "expenses", label: "Expenses" },
   { key: "cash-check", label: "Cash Check" },
-  { key: "inventory", label: "Inventory" },
-  { key: "returns-damage", label: "Returns & Damage" },
+  { key: "inventory", label: "Stock Movement" },
+  { key: "returns-damage", label: "Returns / Damage" },
   { key: "summary", label: "Summary" },
   { key: "attachments", label: "Attachments" },
   { key: "audit-trail", label: "Audit Trail" }

@@ -117,6 +117,9 @@ export type Database = {
           product_code: string;
           product_name: string;
           unit_price: number;
+          distributor_price: number;
+          wholesale_price: number | null;
+          piece_margin: number | null;
           brand: string | null;
           product_family: string;
           variant: string | null;
@@ -142,6 +145,9 @@ export type Database = {
           product_code: string;
           product_name: string;
           unit_price: number;
+          distributor_price?: number;
+          wholesale_price?: number | null;
+          piece_margin?: number | null;
           brand?: string | null;
           product_family: string;
           variant?: string | null;
@@ -379,7 +385,6 @@ export type TableInsert<TableName extends keyof Database["public"]["Tables"]> =
 
 export type TableUpdate<TableName extends keyof Database["public"]["Tables"]> =
   Database["public"]["Tables"][TableName]["Update"];
-
 
 
 

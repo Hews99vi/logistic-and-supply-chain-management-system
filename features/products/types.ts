@@ -21,6 +21,9 @@ export type ProductListItem = Pick<
   | "quantity_entry_mode"
   | "category"
   | "unit_price"
+  | "distributor_price"
+  | "wholesale_price"
+  | "piece_margin"
   | "sku"
   | "is_active"
   | "updated_at"
@@ -53,6 +56,9 @@ export type ProductFormValues = {
   quantityEntryMode: ProductQuantityEntryMode;
   category: ProductCategory | "";
   unitPrice: string;
+  distributorPrice: string;
+  wholesalePrice: string;
+  pieceMargin: string;
   isActive: boolean;
 };
 
@@ -71,6 +77,8 @@ export type AuthSession = {
     email?: string;
     profileRole: "admin" | "supervisor" | "driver" | "cashier";
     isActive: boolean;
+    organizationId?: string | null;
+    permissions?: Record<string, Record<string, boolean | undefined> | undefined> | null;
   };
 };
 
@@ -99,8 +107,8 @@ export const PRODUCT_SELLING_UNIT_OPTIONS: Array<{ value: ProductSellingUnit; la
 ];
 
 export const PRODUCT_QUANTITY_ENTRY_MODE_OPTIONS: Array<{ value: ProductQuantityEntryMode; label: string; description: string }> = [
-  { value: "pack", label: "Pack / Case Qty", description: "Operators enter outer packs or cases." },
-  { value: "unit", label: "Unit Qty", description: "Operators enter loose inner units or pieces." }
+  { value: "unit", label: "Selling Unit Qty", description: "Operators enter the same unit quantity used in Ambewela Flat Data." },
+  { value: "pack", label: "Pack / Case Qty", description: "Legacy mode only. Avoid for Ambewela products because it will not match Flat Data." }
 ];
 
 function normalizeText(value: string) {
@@ -180,7 +188,7 @@ export function buildProductStructuredSummary(product: ProductListItem) {
   if (sizePart) pieces.push(sizePart);
   if (product.pack_size !== null && product.pack_size !== undefined) pieces.push(`x ${product.pack_size}`);
   if (product.selling_unit) pieces.push(product.selling_unit);
-  pieces.push(product.quantity_entry_mode === "unit" ? "entered as units" : "entered as packs/cases");
+  pieces.push(product.quantity_entry_mode === "unit" ? "entered as selling units" : "entered as packs/cases");
 
   return pieces.join(" | ");
 }

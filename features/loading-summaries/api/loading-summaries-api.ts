@@ -9,6 +9,7 @@ import type {
   ProductOption,
   RouteProgramFilterOption
 } from "@/features/loading-summaries/types";
+import { fetchCachedAuthSession, redirectToLogin } from "@/features/auth/api/session-cache";
 
 type ApiEnvelope<T> = {
   data: T;
@@ -53,6 +54,10 @@ async function readEnvelope<T>(response: Response, fallback: string) {
   const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | ApiErrorEnvelope | null;
 
   if (!response.ok) {
+    if (response.status === 401) {
+      redirectToLogin();
+    }
+
     throw new Error(toErrorMessage(payload, fallback));
   }
 
@@ -116,13 +121,7 @@ function toCreatePayload(values: LoadingSummaryFormValues): LoadingSummaryCreate
 }
 
 export async function fetchAuthSession() {
-  const response = await fetch("/api/auth/me", {
-    method: "GET",
-    credentials: "include",
-    cache: "no-store"
-  });
-
-  return readEnvelope<AuthSession>(response, "Failed to load current session.");
+  return fetchCachedAuthSession<AuthSession>();
 }
 
 export async function fetchLoadingSummaries(filters: LoadingSummaryFilterState) {
@@ -134,6 +133,16 @@ export async function fetchLoadingSummaries(filters: LoadingSummaryFilterState) 
   });
 
   return readEnvelope<LoadingSummaryListResponse>(response, "Failed to load loading summaries.");
+}
+
+export async function deleteLoadingSummary(reportId: string) {
+  const response = await fetch(`/api/reports/${reportId}`, {
+    method: "DELETE",
+    credentials: "include",
+    cache: "no-store"
+  });
+
+  return readEnvelope<{ id: string; deleted: boolean }>(response, "Failed to delete loading summary.");
 }
 
 export async function fetchLoadingSummaryDetail(summaryId: string) {
@@ -224,7 +233,7 @@ export async function finalizeLoadingSummary(summaryId: string, loadingNotes?: s
 }
 
 export async function fetchRouteFilterOptions() {
-  const response = await fetch("/api/route-programs?page=1&pageSize=100&isActive=true", {
+  const response = await fetch("/api/route-programs?page=1&pageSize=100&isActive=true&includeCount=false", {
     method: "GET",
     credentials: "include",
     cache: "no-store"
@@ -242,7 +251,7 @@ export async function fetchRouteFilterOptions() {
 }
 
 export async function fetchProductOptions() {
-  const response = await fetch("/api/products?page=1&pageSize=100&isActive=true", {
+  const response = await fetch("/api/products?page=1&pageSize=100&isActive=true&includeCount=false", {
     method: "GET",
     credentials: "include",
     cache: "no-store"
@@ -265,9 +274,6 @@ export async function fetchProductOptions() {
 
   return options;
 }
-
-
-
 
 
 

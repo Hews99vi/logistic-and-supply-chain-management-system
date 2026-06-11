@@ -21,6 +21,7 @@ export function useReportWorkspace(reportId: string) {
   const [detail, setDetail] = useState<ReportDetailEnvelope | null>(null);
   const [role, setRole] = useState<"admin" | "supervisor" | "driver" | "cashier" | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [permissions, setPermissions] = useState<Record<string, Record<string, boolean | undefined> | undefined> | null>(null);
 
   const [draftForm, setDraftForm] = useState({
     reportDate: "",
@@ -45,6 +46,7 @@ export function useReportWorkspace(reportId: string) {
 
       setCurrentUserId(session.user.id);
       setRole(session.user.profileRole);
+      setPermissions(session.user.permissions ?? null);
       setDetail(reportDetail);
       setDraftForm({
         reportDate: reportDetail.report.reportDate,
@@ -64,40 +66,62 @@ export function useReportWorkspace(reportId: string) {
 
   const status = detail?.report.status;
   const reportOwnerId = detail?.report.preparedBy;
+  const can = useCallback((feature: string, action: string) => {
+    return Boolean(permissions?.[feature]?.[action]);
+  }, [permissions]);
 
   const canSaveDraft = useMemo(() => {
     if (!detail || !role || !currentUserId) return false;
     if (status !== "draft") return false;
 
+    if (!can("daily_reports", "edit")) return false;
+
     if (role === "driver") {
       return reportOwnerId === currentUserId;
     }
 
-    return role === "admin" || role === "supervisor" || role === "cashier";
-  }, [currentUserId, detail, reportOwnerId, role, status]);
+    return true;
+  }, [can, currentUserId, detail, reportOwnerId, role, status]);
+
+  const canEditOperations = canSaveDraft;
+
+  const canEditFinance = useMemo(() => {
+    if (!detail || !role || !currentUserId) return false;
+    if (status !== "draft") return false;
+    if (!can("date_sheet", "edit")) return false;
+
+    if (role === "driver") {
+      return reportOwnerId === currentUserId;
+    }
+
+    return true;
+  }, [can, currentUserId, detail, reportOwnerId, role, status]);
 
   const canSubmit = useMemo(() => {
     if (!detail || !role || !currentUserId) return false;
     if (status !== "draft") return false;
+    if (!can("date_sheet", "submit")) return false;
 
     if (role === "driver") {
       return reportOwnerId === currentUserId;
     }
 
-    return role === "admin" || role === "supervisor";
-  }, [currentUserId, detail, reportOwnerId, role, status]);
+    return true;
+  }, [can, currentUserId, detail, reportOwnerId, role, status]);
 
-  const canApprove = status === "submitted" && (role === "admin" || role === "supervisor");
-  const canReject = status === "submitted" && (role === "admin" || role === "supervisor");
+  const canApprove = status === "submitted" && can("daily_reports", "approve");
+  const canReject = status === "submitted" && can("daily_reports", "approve");
+  const canResolveDeductions = status === "draft" && can("daily_reports", "approve");
+  const canImportFlatData = status === "draft" && can("date_sheet", "import");
 
   const canReopen = useMemo(() => {
-    if (!status || !role) return false;
+    if (!status || !role || !can("daily_reports", "reopen")) return false;
 
     if (status === "approved") return role === "admin";
     if (status === "submitted" || status === "rejected") return role === "admin" || role === "supervisor";
 
     return false;
-  }, [role, status]);
+  }, [can, role, status]);
 
   const doAction = useCallback(async (action: () => Promise<unknown>) => {
     setSaving(true);
@@ -164,7 +188,11 @@ export function useReportWorkspace(reportId: string) {
     canSubmit,
     canApprove,
     canReject,
+    canResolveDeductions,
     canReopen,
+    canImportFlatData,
+    canEditFinance,
+    canEditOperations,
     reload: load,
     actions: {
       saveDraft,

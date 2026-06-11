@@ -7,3 +7,25 @@ node_modules
 .env.test.local
 coverage
 dist
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+
+# TypeScript build cache
+*.tsbuildinfo
+
+# Local test scripts
+test-fetch.js
+test-query.js
+test_supabase.js
+test_supabase2.js
+test_supabase3.js
+
+# Local reference/import files
+*.csv
+*.xls
+*.xlsx
+*.pdf

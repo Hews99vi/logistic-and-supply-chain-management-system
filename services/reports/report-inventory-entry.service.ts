@@ -22,6 +22,7 @@ type ProductSnapshotRow = {
   product_name: string;
   display_name: string | null;
   unit_price: number;
+  distributor_price: number;
   brand: string | null;
   product_family: string;
   variant: string | null;
@@ -49,6 +50,10 @@ type ReportInventoryEntryRow = {
   selling_unit_snapshot: string | null;
   quantity_entry_mode_snapshot: "pack" | "unit" | null;
   unit_price_snapshot: number;
+  distributor_price_snapshot: number;
+  sales_revenue_snapshot: number;
+  costed_sales_qty_snapshot: number;
+  gross_profit_snapshot: number;
   loading_qty: number;
   sales_qty: number;
   balance_qty: number;
@@ -80,6 +85,10 @@ const INVENTORY_ENTRY_SELECT = `
   selling_unit_snapshot,
   quantity_entry_mode_snapshot,
   unit_price_snapshot,
+  distributor_price_snapshot,
+  sales_revenue_snapshot,
+  costed_sales_qty_snapshot,
+  gross_profit_snapshot,
   loading_qty,
   sales_qty,
   balance_qty,
@@ -105,6 +114,10 @@ function mapInventoryEntry(row: ReportInventoryEntryRow): DailyReportInventoryEn
     sellingUnitSnapshot: row.selling_unit_snapshot,
     quantityEntryModeSnapshot: row.quantity_entry_mode_snapshot,
     unitPriceSnapshot: row.unit_price_snapshot,
+    distributorPriceSnapshot: row.distributor_price_snapshot,
+    salesRevenueSnapshot: row.sales_revenue_snapshot,
+    costedSalesQtySnapshot: row.costed_sales_qty_snapshot,
+    grossProfitSnapshot: row.gross_profit_snapshot,
     loadingQty: row.loading_qty,
     salesQty: row.sales_qty,
     balanceQty: row.balance_qty,
@@ -128,8 +141,21 @@ function buildProductSnapshotPayload(product: ProductSnapshotRow) {
     pack_size_snapshot: product.pack_size,
     selling_unit_snapshot: product.selling_unit,
     quantity_entry_mode_snapshot: product.quantity_entry_mode ?? (product.selling_unit?.toLowerCase() === "unit" ? "unit" : "pack"),
-    unit_price_snapshot: product.unit_price
+    unit_price_snapshot: product.unit_price,
+    distributor_price_snapshot: product.distributor_price
   };
+}
+
+function resolveSalesRevenueSnapshot(input: {
+  explicitSalesRevenue?: number;
+  salesQty: number;
+  unitPrice: number;
+}) {
+  if (input.explicitSalesRevenue !== undefined) {
+    return input.explicitSalesRevenue;
+  }
+
+  return Math.round(input.salesQty * input.unitPrice * 100) / 100;
 }
 
 function mapInventoryEntryDatabaseError(error: DatabaseErrorLike) {
@@ -151,7 +177,7 @@ function mapInventoryEntryDatabaseError(error: DatabaseErrorLike) {
     return errorResponse(
       422,
       "INVALID_INVENTORY_ENTRY",
-      "Quantities must be non-negative, and sold packs/cases cannot exceed loaded packs/cases."
+      "Quantities must be non-negative selling units, and sold quantity cannot exceed loaded quantity."
     );
   }
 
@@ -228,7 +254,7 @@ async function ensureProductExists(productId: string) {
   const supabase = await createSupabaseServerClient();
   const { data, error } = (await supabase
     .from("products")
-    .select("id, product_code, product_name, display_name, unit_price, brand, product_family, variant, unit_size, unit_measure, pack_size, selling_unit, quantity_entry_mode, is_active")
+    .select("id, product_code, product_name, display_name, unit_price, distributor_price, brand, product_family, variant, unit_size, unit_measure, pack_size, selling_unit, quantity_entry_mode, is_active")
     .eq("id", productId)
     .maybeSingle()) as {
     data: ProductSnapshotRow | null;
@@ -287,7 +313,7 @@ function validateResolvedQuantities(loadingQty: number, salesQty: number) {
     return null;
   }
 
-  return errorResponse(422, "VALIDATION_ERROR", "Sold packs/cases cannot exceed loaded packs/cases.");
+  return errorResponse(422, "VALIDATION_ERROR", "Sold units cannot exceed loaded units.");
 }
 
 export class ReportInventoryEntryService {
@@ -368,7 +394,13 @@ export class ReportInventoryEntryService {
         ...buildProductSnapshotPayload(product.data!),
         loading_qty: parsed.data.loadingQty,
         sales_qty: parsed.data.salesQty,
-        lorry_qty: parsed.data.lorryQty
+        lorry_qty: parsed.data.lorryQty,
+        costed_sales_qty_snapshot: parsed.data.costedSalesQty ?? parsed.data.salesQty,
+        sales_revenue_snapshot: resolveSalesRevenueSnapshot({
+          explicitSalesRevenue: parsed.data.salesRevenue,
+          salesQty: parsed.data.salesQty,
+          unitPrice: product.data!.unit_price
+        })
       } as never)
       .select(INVENTORY_ENTRY_SELECT)
       .single()) as {
@@ -424,10 +456,15 @@ export class ReportInventoryEntryService {
     const resolvedProductId = parsed.data.productId ?? existing.data!.product_id;
     const resolvedLoadingQty = parsed.data.loadingQty ?? existing.data!.loading_qty;
     const resolvedSalesQty = parsed.data.salesQty ?? existing.data!.sales_qty;
+    const resolvedCostedSalesQty = parsed.data.costedSalesQty ?? (parsed.data.salesQty !== undefined ? resolvedSalesQty : existing.data!.costed_sales_qty_snapshot);
 
     const quantityError = validateResolvedQuantities(resolvedLoadingQty, resolvedSalesQty);
     if (quantityError) {
       return quantityError;
+    }
+
+    if (resolvedCostedSalesQty > resolvedSalesQty) {
+      return errorResponse(422, "VALIDATION_ERROR", "Costed sold units cannot exceed sold units.");
     }
 
     const product = await ensureProductExists(resolvedProductId);
@@ -443,6 +480,16 @@ export class ReportInventoryEntryService {
     if (parsed.data.loadingQty !== undefined) updatePayload.loading_qty = parsed.data.loadingQty;
     if (parsed.data.salesQty !== undefined) updatePayload.sales_qty = parsed.data.salesQty;
     if (parsed.data.lorryQty !== undefined) updatePayload.lorry_qty = parsed.data.lorryQty;
+    if (parsed.data.costedSalesQty !== undefined || parsed.data.salesQty !== undefined) {
+      updatePayload.costed_sales_qty_snapshot = resolvedCostedSalesQty;
+    }
+    if (parsed.data.salesRevenue !== undefined || parsed.data.salesQty !== undefined || parsed.data.productId !== undefined) {
+      updatePayload.sales_revenue_snapshot = resolveSalesRevenueSnapshot({
+        explicitSalesRevenue: parsed.data.salesRevenue,
+        salesQty: resolvedSalesQty,
+        unitPrice: product.data!.unit_price
+      });
+    }
 
     const supabase = await createSupabaseServerClient();
     const { data, error } = (await supabase
@@ -553,7 +600,9 @@ export class ReportInventoryEntryService {
       productId: item.productId,
       loadingQty: item.loadingQty,
       salesQty: item.salesQty,
-      lorryQty: item.lorryQty
+      lorryQty: item.lorryQty,
+      salesRevenue: item.salesRevenue ?? null,
+      costedSalesQty: item.costedSalesQty ?? item.salesQty
     }));
 
     const supabase = await createSupabaseServerClient();
@@ -576,9 +625,4 @@ export class ReportInventoryEntryService {
     });
   }
 }
-
-
-
-
-
 

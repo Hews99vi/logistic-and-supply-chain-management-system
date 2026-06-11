@@ -1,4 +1,4 @@
-import { requireAuth, requireRole } from "@/lib/auth/helpers";
+import { requireFeaturePermission } from "@/lib/auth/permissions";
 import { errorResponse, fromPostgrestError, successResponse } from "@/lib/db/response";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getPaginationRange, uuidSchema } from "@/lib/validation/common";
@@ -37,6 +37,7 @@ async function resolveActiveOrganizationId(userId: string) {
     .select("organization_id")
     .eq("user_id", userId)
     .eq("status", "ACTIVE")
+    .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle()) as {
     data: MembershipLookup | null;
@@ -69,7 +70,7 @@ async function resolveActiveOrganizationId(userId: string) {
 
 export class CustomerService {
   static async listCustomers(request: Request) {
-    const auth = await requireAuth();
+    const auth = await requireFeaturePermission("customers", "view");
     if (auth.response || !auth.context) {
       return auth.response;
     }
@@ -145,7 +146,7 @@ export class CustomerService {
   }
 
   static async getCustomerById(customerId: string) {
-    const auth = await requireAuth();
+    const auth = await requireFeaturePermission("customers", "view");
     if (auth.response || !auth.context) {
       return auth.response;
     }
@@ -191,7 +192,7 @@ export class CustomerService {
   }
 
   static async createCustomer(request: Request) {
-    const auth = await requireRole(["admin", "supervisor"]);
+    const auth = await requireFeaturePermission("customers", "create");
     if (auth.response || !auth.context) {
       return auth.response;
     }
@@ -245,7 +246,7 @@ export class CustomerService {
   }
 
   static async updateCustomer(customerId: string, request: Request) {
-    const auth = await requireRole(["admin", "supervisor"]);
+    const auth = await requireFeaturePermission("customers", "edit");
     if (auth.response || !auth.context) {
       return auth.response;
     }
@@ -311,7 +312,7 @@ export class CustomerService {
   }
 
   static async deactivateCustomer(customerId: string) {
-    const auth = await requireRole(["admin", "supervisor"]);
+    const auth = await requireFeaturePermission("customers", "delete");
     if (auth.response || !auth.context) {
       return auth.response;
     }
@@ -357,4 +358,3 @@ export class CustomerService {
     return successResponse(data);
   }
 }
-

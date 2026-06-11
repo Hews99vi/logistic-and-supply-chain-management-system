@@ -7,6 +7,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Alert } from "@/components/ui/alert";
 import { DashboardSidebar } from "@/features/dashboard/components/dashboard-sidebar";
 import { LoadingSummaryFinalizeConfirmDialog } from "@/features/loading-summaries/components/loading-summary-finalize-confirm-dialog";
+import { LoadingSummaryDeleteConfirmDialog } from "@/features/loading-summaries/components/loading-summary-delete-confirm-dialog";
 import { LoadingSummariesFilterToolbar } from "@/features/loading-summaries/components/loading-summaries-filter-toolbar";
 import { LoadingSummaryFormPanel } from "@/features/loading-summaries/components/loading-summary-form-panel";
 import { LoadingSummariesTable } from "@/features/loading-summaries/components/loading-summaries-table";
@@ -43,10 +44,13 @@ export function LoadingSummariesManagementView() {
     updateFormValues,
     submitCreate,
     finalizeSummary,
-    canFinalize
+    canFinalize,
+    deleteSummary,
+    deletingId
   } = useLoadingSummariesManagement();
 
   const [pendingFinalizeSummary, setPendingFinalizeSummary] = useState<LoadingSummaryListItem | null>(null);
+  const [pendingDeleteSummary, setPendingDeleteSummary] = useState<LoadingSummaryListItem | null>(null);
 
   const handleRequestFinalize = (item: LoadingSummaryListItem) => {
     if (!canFinalize(item)) return;
@@ -70,14 +74,39 @@ export function LoadingSummariesManagementView() {
     setPendingFinalizeSummary(null);
   };
 
+  const handleRequestDelete = (item: LoadingSummaryListItem) => {
+    if (item.status !== "draft" || !canCreate) return;
+    setPendingDeleteSummary(item);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!pendingDeleteSummary) return;
+
+    const didDelete = await deleteSummary(pendingDeleteSummary);
+    if (didDelete) {
+      setPendingDeleteSummary(null);
+    }
+  };
+
+  const handleCancelDelete = () => {
+    if (pendingDeleteSummary && deletingId === pendingDeleteSummary.id) {
+      return;
+    }
+
+    setPendingDeleteSummary(null);
+  };
+
   const isFinalizeSubmitting = Boolean(pendingFinalizeSummary && finalizingId === pendingFinalizeSummary.id);
+  const isDeleteSubmitting = Boolean(pendingDeleteSummary && deletingId === pendingDeleteSummary.id);
 
   return (
     <AppShell sidebar={<DashboardSidebar activeKey="loading-summaries" />}>
       <header className="app-page-header">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Operations / Loading Summaries</p>
-        <h1 className="mt-2 text-4xl font-extrabold tracking-tight text-slate-900">Daily Loading Summary</h1>
-        <p className="mt-2 text-slate-600">Manage morning dispatch loading sheets by date and route before lorry departure.</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Operations / Route Day Sheets</p>
+        <h1 className="mt-2 text-4xl font-extrabold tracking-tight text-slate-900">Route Day Sheets</h1>
+        <p className="mt-2 text-slate-600">
+          Create a route-day sheet, open it, add morning loading products, then finalize the lorry loading.
+        </p>
       </header>
 
       <LoadingSummariesFilterToolbar
@@ -125,6 +154,11 @@ export function LoadingSummariesManagementView() {
         />
       ) : null}
 
+      <Alert className="border-blue-200 bg-blue-50 text-blue-800">
+        After creating a loading summary, click <span className="font-semibold">Open Route Sheet</span>. Add products in the{" "}
+        <span className="font-semibold">Route Stock Movement</span> section, set the loading quantities, save the draft, then finalize morning loading.
+      </Alert>
+
       <LoadingSummariesTable
         items={items}
         loading={loading}
@@ -136,6 +170,8 @@ export function LoadingSummariesManagementView() {
         onPageChange={setPage}
         onPageSizeChange={setPageSize}
         onFinalize={handleRequestFinalize}
+        deletingId={deletingId}
+        onDelete={handleRequestDelete}
       />
 
       <LoadingSummaryFinalizeConfirmDialog
@@ -143,6 +179,13 @@ export function LoadingSummariesManagementView() {
         submitting={isFinalizeSubmitting}
         onCancel={handleCancelFinalize}
         onConfirm={handleConfirmFinalize}
+      />
+
+      <LoadingSummaryDeleteConfirmDialog
+        summary={pendingDeleteSummary}
+        submitting={isDeleteSubmitting}
+        onCancel={handleCancelDelete}
+        onConfirm={handleConfirmDelete}
       />
     </AppShell>
   );

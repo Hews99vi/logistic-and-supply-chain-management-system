@@ -269,8 +269,8 @@ export function ReportReturnDamageEntriesPanel({
     <Card>
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <CardTitle>Returns & Damage Entries</CardTitle>
-          <CardDescription>Track return, damage, and free issue quantities using each product's configured quantity mode, with backend-generated totals and values.</CardDescription>
+          <CardTitle>Returns / Damage from Flat Data</CardTitle>
+          <CardDescription>Track return, damage, and free issue quantities as selling units, with backend-generated totals and values.</CardDescription>
         </div>
 
         <div className="flex gap-2">
@@ -296,7 +296,7 @@ export function ReportReturnDamageEntriesPanel({
           <Alert>No active products found. Add products before recording return and damage entries.</Alert>
         ) : null}
 
-        <Alert>Quantities in this section follow each product's configured quantity mode. Unit-equivalent helpers appear only when the row has structured pack metadata.</Alert>
+        <Alert>Quantities are selling units. Packaging details are shown only as reference for full-case breakdowns.</Alert>
 
         <div className="overflow-x-auto rounded-lg border border-slate-200">
           <table className="min-w-full text-sm">
@@ -331,7 +331,7 @@ export function ReportReturnDamageEntriesPanel({
               ) : editableRows.length === 0 ? (
                 <tr>
                   <td className="px-3 py-10 text-center text-slate-500" colSpan={15}>
-                    No return or damage entries yet. Add a row to start capturing movements using each product's quantity mode.
+                    No return or damage entries yet. Add a row to start capturing movements in selling units.
                   </td>
                 </tr>
               ) : (
@@ -463,5 +463,3 @@ export function ReportReturnDamageEntriesPanel({
     </Card>
   );
 }
-
-

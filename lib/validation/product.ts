@@ -92,6 +92,7 @@ const productBaseSchema = z.object({
   productName: optionalTextField(160),
   category: productCategorySchema.optional(),
   unitPrice: z.number().nonnegative(),
+  distributorPrice: z.number().nonnegative().optional(),
   sku: optionalTextField(64),
   brand: optionalTextField(120),
   productFamily: optionalTextField(160),

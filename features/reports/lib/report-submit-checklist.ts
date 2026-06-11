@@ -11,6 +11,7 @@ export type ReportSubmitValidationCheck = {
 type ReportSubmitChecklistInput = {
   routeNameSnapshot: string;
   staffName: string;
+  loadingCompletedAt: string | null;
   totalBillCount: number;
   deliveredBillCount: number;
   cancelledBillCount: number;
@@ -19,12 +20,21 @@ type ReportSubmitChecklistInput = {
   cashInHand: number;
   cashPhysicalTotal: number;
   invoiceEntriesCount: number;
+  inventoryEntriesCount: number;
+  invalidInventoryCount: number;
+  positiveVarianceCount: number;
+  unresolvedMissingStockCount: number;
   denominationRowCount: number;
   denominationPositiveNoteCount: number;
 };
 
 export function buildReportSubmitChecklist(input: ReportSubmitChecklistInput): ReportSubmitValidationCheck[] {
   const hasInvoiceEntries = input.invoiceEntriesCount > 0;
+  const loadingFinalized = Boolean(input.loadingCompletedAt);
+  const hasInventoryEntries = input.inventoryEntriesCount > 0;
+  const inventoryQuantitiesValid = input.invalidInventoryCount === 0;
+  const moreStockResolved = input.positiveVarianceCount === 0;
+  const missingStockResolved = input.unresolvedMissingStockCount === 0;
   const hasRouteAndStaff = input.routeNameSnapshot.trim().length > 0 && input.staffName.trim().length > 0;
   const hasStandardDenominations = input.denominationRowCount === 10;
   const cashBalanced = Math.abs(input.cashDifference) < 0.0001;
@@ -34,6 +44,47 @@ export function buildReportSubmitChecklist(input: ReportSubmitChecklistInput): R
   const hasMeaningfulDenominationData = !requiresCashCheck || input.denominationPositiveNoteCount > 0;
 
   return [
+    {
+      key: "loading-finalized",
+      label: "Morning loading finalized",
+      passed: loadingFinalized,
+      message: loadingFinalized ? "The lorry loading has been finalized." : "Finalize the morning loading summary before DATE submit.",
+      blocking: true
+    },
+    {
+      key: "inventory-lines",
+      label: "Route product movement captured",
+      passed: hasInventoryEntries,
+      message: hasInventoryEntries ? "Product movement rows are available." : "Add at least one route product movement row.",
+      blocking: true
+    },
+    {
+      key: "inventory-quantities",
+      label: "Stock movement quantities are valid",
+      passed: inventoryQuantitiesValid,
+      message: inventoryQuantitiesValid
+        ? "Sales and lorry counts are valid selling-unit quantities."
+        : "Fix invalid stock rows before submit.",
+      blocking: true
+    },
+    {
+      key: "more-stock",
+      label: "More-stock variances corrected",
+      passed: moreStockResolved,
+      message: moreStockResolved
+        ? "No unexplained more-stock variance remains."
+        : "Correct positive more-stock variance before submit.",
+      blocking: true
+    },
+    {
+      key: "missing-stock",
+      label: "Missing stock deductions resolved",
+      passed: missingStockResolved,
+      message: missingStockResolved
+        ? "Missing stock has no pending deduction decisions."
+        : "Approve or waive missing-stock driver deductions before submit.",
+      blocking: true
+    },
     {
       key: "invoice",
       label: "Invoice entries captured",
@@ -91,6 +142,7 @@ export function buildReportSubmitChecklistFromEnvelope(report: ReportDetailEnvel
   return buildReportSubmitChecklist({
     routeNameSnapshot: report.report.routeNameSnapshot,
     staffName: report.report.staffName,
+    loadingCompletedAt: report.report.loadingCompletedAt,
     totalBillCount: report.report.totalBillCount,
     deliveredBillCount: report.report.deliveredBillCount,
     cancelledBillCount: report.report.cancelledBillCount,
@@ -99,6 +151,10 @@ export function buildReportSubmitChecklistFromEnvelope(report: ReportDetailEnvel
     cashInHand: report.report.cashInHand,
     cashPhysicalTotal: report.report.cashPhysicalTotal,
     invoiceEntriesCount: report.invoiceEntries.length,
+    inventoryEntriesCount: report.inventoryEntries.length,
+    invalidInventoryCount: report.inventoryEntries.filter((row) => row.salesQty > row.loadingQty || row.lorryQty < 0).length,
+    positiveVarianceCount: report.inventoryEntries.filter((row) => row.varianceQty > 0).length,
+    unresolvedMissingStockCount: report.driverDeductions.filter((row) => row.status === "pending").length,
     denominationRowCount: report.cashDenominations.length,
     denominationPositiveNoteCount: report.cashDenominations.reduce(
       (count, row) => count + (row.noteCount > 0 ? 1 : 0),

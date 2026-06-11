@@ -3,7 +3,7 @@ import { z } from "zod";
 import { uuidSchema } from "@/lib/validation/common";
 import { optionalNotesSchema } from "@/lib/validation/report-line-item-common";
 
-const packQuantitySchema = z.number().int().min(0);
+const unitQuantitySchema = z.number().int().min(0);
 
 const optionalTrimmedString = (max: number) => z
   .string()
@@ -31,7 +31,7 @@ function withValidReturnDamageQuantities<T extends z.ZodTypeAny>(schema: T) {
     if (total <= 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "At least one of damageQty, returnQty, or freeIssueQty must be greater than zero. Quantities follow the product's configured quantity mode.",
+        message: "At least one of damageQty, returnQty, or freeIssueQty must be greater than zero. Quantities are recorded as selling units.",
         path: ["damageQty"]
       });
     }
@@ -42,9 +42,9 @@ const returnDamageBaseObjectSchema = z.object({
   productId: uuidSchema,
   invoiceNo: optionalTrimmedString(80),
   shopName: optionalTrimmedString(160),
-  damageQty: packQuantitySchema.default(0),
-  returnQty: packQuantitySchema.default(0),
-  freeIssueQty: packQuantitySchema.default(0),
+  damageQty: unitQuantitySchema.default(0),
+  returnQty: unitQuantitySchema.default(0),
+  freeIssueQty: unitQuantitySchema.default(0),
   notes: optionalNotesSchema
 });
 
@@ -54,9 +54,9 @@ export const reportReturnDamageEntryUpdateSchema = z.object({
   productId: uuidSchema.optional(),
   invoiceNo: optionalTrimmedString(80),
   shopName: optionalTrimmedString(160),
-  damageQty: packQuantitySchema.optional(),
-  returnQty: packQuantitySchema.optional(),
-  freeIssueQty: packQuantitySchema.optional(),
+  damageQty: unitQuantitySchema.optional(),
+  returnQty: unitQuantitySchema.optional(),
+  freeIssueQty: unitQuantitySchema.optional(),
   notes: optionalNotesSchema
 }).refine((value) => Object.keys(value).length > 0, {
   message: "At least one return or damage field must be provided."
@@ -90,4 +90,3 @@ export type ReportReturnDamageEntryCreateInput = z.infer<typeof reportReturnDama
 export type ReportReturnDamageEntryUpdateInput = z.infer<typeof reportReturnDamageEntryUpdateSchema>;
 export type ReportReturnDamageEntryBatchItemInput = z.infer<typeof reportReturnDamageEntryBatchItemSchema>;
 export type ReportReturnDamageEntryBatchSaveInput = z.infer<typeof reportReturnDamageEntryBatchSaveSchema>;
-

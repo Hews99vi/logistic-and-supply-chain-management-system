@@ -15,6 +15,7 @@ import type {
   DashboardFilters,
   RouteProgramListResponse
 } from "@/features/dashboard/types";
+import { fetchCachedAuthSession, redirectToLoginOnUnauthorized } from "@/features/auth/api/session-cache";
 
 function toQueryString(filters: DashboardFilters) {
   const params = new URLSearchParams();
@@ -31,6 +32,7 @@ async function readJson<T>(response: Response): Promise<T> {
   const payload = (await response.json().catch(() => null)) as T | ApiErrorEnvelope | null;
 
   if (!response.ok) {
+    redirectToLoginOnUnauthorized(response);
     const message = (payload as ApiErrorEnvelope | null)?.error?.message ?? "Request failed.";
     throw new Error(message);
   }
@@ -54,7 +56,7 @@ async function fetchEnvelope<T>(url: string): Promise<T> {
 }
 
 export async function fetchAuthSession() {
-  return fetchEnvelope<AuthSession>("/api/auth/me");
+  return fetchCachedAuthSession<AuthSession>();
 }
 
 export async function fetchRouteProgramsTotal() {

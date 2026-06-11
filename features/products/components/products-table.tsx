@@ -57,6 +57,7 @@ type ProductsTableProps = {
   pageSize: number;
   total: number;
   canManageProducts: boolean;
+  canManageProductCosts: boolean;
   togglingProductId: string | null;
   onPageChange: (page: number) => void;
   onPageSizeChange: (size: number) => void;
@@ -71,6 +72,7 @@ export function ProductsTable({
   pageSize,
   total,
   canManageProducts,
+  canManageProductCosts,
   togglingProductId,
   onPageChange,
   onPageSizeChange,
@@ -100,7 +102,7 @@ export function ProductsTable({
               const productLabel = product.display_name ?? product.product_name;
               const productSummary = buildProductStructuredSummary(product);
               const packInfo = formatPackInformation(product);
-              const quantityMode = product.quantity_entry_mode === "unit" ? "Units entered" : "Packs / cases entered";
+              const quantityMode = product.quantity_entry_mode === "unit" ? "Selling units entered" : "Packs / cases entered";
 
               return (
                 <article key={product.id} className="space-y-4 p-4">
@@ -116,6 +118,14 @@ export function ProductsTable({
                     {productSummary && productSummary !== productLabel ? <p className="text-slate-700">{productSummary}</p> : null}
                     <p className="text-slate-700">{packInfo || "Not structured yet"}</p>
                     <p className="font-semibold text-slate-900">{formatCurrencyLkr(product.unit_price)}</p>
+                    {canManageProductCosts ? (
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <p className="text-slate-500">Dist. <span className="font-semibold text-slate-900">{formatCurrencyLkr(product.distributor_price ?? 0)}</span></p>
+                        <p className="text-slate-500">W/Sale <span className="font-semibold text-slate-900">{formatCurrencyLkr(product.wholesale_price ?? 0)}</span></p>
+                        <p className="text-slate-500">Margin <span className="font-semibold text-emerald-700">{formatCurrencyLkr(product.piece_margin ?? 0)}</span></p>
+                        <p className="text-slate-500">Sys Margin <span className="font-semibold text-emerald-700">{formatCurrencyLkr(product.unit_price - (product.distributor_price ?? 0))}</span></p>
+                      </div>
+                    ) : null}
                     <p className="text-slate-500">{quantityMode}</p>
                     {product.category ? <p className="text-xs uppercase tracking-wide text-slate-400">{product.category.replaceAll("_", " ")}</p> : null}
                     {!product.display_name && product.product_name ? <p className="text-xs text-slate-400">Legacy name: {product.product_name}</p> : null}
@@ -150,7 +160,7 @@ export function ProductsTable({
         </div>
 
         <div className="hidden overflow-x-auto md:block">
-          <table className="min-w-[960px] xl:min-w-full">
+          <table className={canManageProductCosts ? "min-w-[1120px] xl:min-w-full" : "min-w-[960px] xl:min-w-full"}>
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.14em] text-slate-500">
               <tr>
                 <th className="px-5 py-4 font-semibold">Product Code</th>
@@ -158,6 +168,10 @@ export function ProductsTable({
                 <th className="px-5 py-4 font-semibold">Pack Info</th>
                 <th className="px-5 py-4 font-semibold">Quantity Mode</th>
                 <th className="px-5 py-4 text-right font-semibold">Rate</th>
+                {canManageProductCosts ? <th className="px-5 py-4 text-right font-semibold">Distributor Price</th> : null}
+                {canManageProductCosts ? <th className="px-5 py-4 text-right font-semibold">Wholesale Price</th> : null}
+                {canManageProductCosts ? <th className="px-5 py-4 text-right font-semibold">Piece Margin</th> : null}
+                {canManageProductCosts ? <th className="px-5 py-4 text-right font-semibold">Sys Margin</th> : null}
                 <th className="px-5 py-4 font-semibold">Status</th>
                 <th className="px-5 py-4 font-semibold">Updated At</th>
                 <th className="px-5 py-4 text-right font-semibold">Actions</th>
@@ -168,12 +182,12 @@ export function ProductsTable({
               {loading ? (
                 Array.from({ length: pageSize }).map((_, index) => (
                   <tr key={index}>
-                    <td className="px-5 py-4" colSpan={8}><Skeleton className="h-10 w-full" /></td>
+                    <td className="px-5 py-4" colSpan={canManageProductCosts ? 12 : 8}><Skeleton className="h-10 w-full" /></td>
                   </tr>
                 ))
               ) : products.length === 0 ? (
                 <tr>
-                  <td className="px-5 py-12 text-center text-slate-500" colSpan={8}>
+                  <td className="px-5 py-12 text-center text-slate-500" colSpan={canManageProductCosts ? 12 : 8}>
                     No products found for the selected filters.
                   </td>
                 </tr>
@@ -205,8 +219,20 @@ export function ProductsTable({
                           <p className="text-slate-400">Not structured yet</p>
                         )}
                       </td>
-                      <td className="px-5 py-4 text-slate-600">{product.quantity_entry_mode === "unit" ? "Units entered" : "Packs / cases entered"}</td>
+                      <td className="px-5 py-4 text-slate-600">{product.quantity_entry_mode === "unit" ? "Selling units entered" : "Packs / cases entered"}</td>
                       <td className="px-5 py-4 text-right font-semibold text-slate-900">{formatCurrencyLkr(product.unit_price)}</td>
+                      {canManageProductCosts ? (
+                        <td className="px-5 py-4 text-right font-semibold text-slate-900">{formatCurrencyLkr(product.distributor_price ?? 0)}</td>
+                      ) : null}
+                      {canManageProductCosts ? (
+                        <td className="px-5 py-4 text-right font-semibold text-slate-900">{formatCurrencyLkr(product.wholesale_price ?? 0)}</td>
+                      ) : null}
+                      {canManageProductCosts ? (
+                        <td className="px-5 py-4 text-right font-semibold text-emerald-700">{formatCurrencyLkr(product.piece_margin ?? 0)}</td>
+                      ) : null}
+                      {canManageProductCosts ? (
+                        <td className="px-5 py-4 text-right font-semibold text-emerald-700">{formatCurrencyLkr(product.unit_price - (product.distributor_price ?? 0))}</td>
+                      ) : null}
                       <td className="px-5 py-4"><ProductStatusBadge isActive={product.is_active} /></td>
                       <td className="px-5 py-4 text-slate-500">{formatDateTime(product.updated_at)}</td>
                       <td className="px-5 py-4">
@@ -269,4 +295,3 @@ export function ProductsTable({
     </Card>
   );
 }
-

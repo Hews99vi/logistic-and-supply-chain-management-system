@@ -33,6 +33,7 @@ export function ProductsManagementView() {
     formSubmitting,
     togglingProductId,
     canManageProducts,
+    canManageProductCosts,
     setSearchInput,
     setCategory,
     setStatus,
@@ -89,6 +90,7 @@ export function ProductsManagementView() {
           formState={formState}
           formError={formError}
           submitting={formSubmitting}
+          canManageProductCosts={canManageProductCosts}
           onClose={closeForm}
           onChange={updateFormValues}
           onSubmit={submitForm}
@@ -102,6 +104,7 @@ export function ProductsManagementView() {
         pageSize={filters.pageSize}
         total={total}
         canManageProducts={canManageProducts}
+        canManageProductCosts={canManageProductCosts}
         togglingProductId={togglingProductId}
         onPageChange={setPage}
         onPageSizeChange={setPageSize}

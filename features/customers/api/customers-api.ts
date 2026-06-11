@@ -8,6 +8,7 @@ import type {
   CustomerRouteProgramContextItem,
   CustomerStatus
 } from "@/features/customers/types";
+import { fetchCachedAuthSession, redirectToLoginOnUnauthorized } from "@/features/auth/api/session-cache";
 import { readCustomerApiErrorMessage } from "@/features/customers/types";
 
 type CustomerCreatePayload = {
@@ -47,6 +48,7 @@ async function readEnvelope<T>(response: Response, fallback: string) {
   const payload = (await response.json().catch(() => null)) as CustomerApiEnvelope<T> | unknown;
 
   if (!response.ok) {
+    redirectToLoginOnUnauthorized(response);
     throw new Error(readCustomerApiErrorMessage(payload, fallback));
   }
 
@@ -79,13 +81,7 @@ function buildCustomersQuery(filters: CustomerFilterState) {
 }
 
 export async function fetchAuthSession() {
-  const response = await fetch("/api/auth/me", {
-    method: "GET",
-    credentials: "include",
-    cache: "no-store"
-  });
-
-  return readEnvelope<AuthSession>(response, "Failed to load current session.");
+  return fetchCachedAuthSession<AuthSession>();
 }
 
 export async function fetchCustomers(filters: CustomerFilterState) {
