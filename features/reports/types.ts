@@ -90,6 +90,10 @@ export type ReportDetailEnvelope = {
   inventoryEntries: DailyReportDetailDto["inventoryEntries"];
   returnDamageEntries: DailyReportDetailDto["returnDamageEntries"];
   driverDeductions: DailyReportDetailDto["driverDeductions"];
+  cashAdjustments: DailyReportDetailDto["cashAdjustments"];
+  cheques: DailyReportDetailDto["cheques"];
+  creditInvoices: DailyReportDetailDto["creditInvoices"];
+  bills: DailyReportDetailDto["bills"];
 };
 
 export type AuthSession = {
@@ -124,7 +128,42 @@ export type ReportExpenseBatchSaveItemInput = {
   expenseCategoryId?: string | null;
   customExpenseName?: string;
   amount: number;
+  paymentMethod?: "cash" | "cheque" | "bank" | "credit" | "other";
+  receiptFilePath?: string | null;
+  receiptFileName?: string | null;
   notes?: string;
+};
+
+export type ReportChequeSaveItemInput = {
+  id?: string;
+  invoiceEntryId?: string | null;
+  invoiceNo?: string | null;
+  customerName?: string | null;
+  chequeNo: string;
+  bankName: string;
+  branchName?: string | null;
+  chequeDate?: string | null;
+  receivedDate?: string;
+  amount: number;
+  status?: "received" | "deposited" | "realized" | "bounced" | "returned" | "cancelled";
+  notes?: string | null;
+};
+
+export type ReportBillSaveItemInput = {
+  id?: string;
+  invoiceEntryId?: string | null;
+  invoiceNo: string;
+  customerName?: string | null;
+  amountSnapshot: number;
+  status: "delivered" | "cancelled" | "returned" | "missing" | "disputed";
+  notes?: string | null;
+};
+
+export type ReportCashAdjustmentSaveItemInput = {
+  id?: string;
+  adjustmentType: "shortage" | "excess";
+  amount: number;
+  reason: string;
 };
 
 export type ReportInventoryBatchSaveItemInput = {
@@ -169,6 +208,7 @@ export type WorkflowActionResult = {
 export type ReportWorkspaceTabKey =
   | "overview"
   | "flat-data"
+  | "finance"
   | "invoices"
   | "expenses"
   | "cash-check"

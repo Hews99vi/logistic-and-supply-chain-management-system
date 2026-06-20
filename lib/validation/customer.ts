@@ -20,7 +20,10 @@ export const customerCreateSchema = z.object({
   addressLine1: z.string().trim().max(250).nullable().optional(),
   addressLine2: z.string().trim().max(250).nullable().optional(),
   city: z.string().trim().max(120).nullable().optional(),
-  status: customerStatusSchema.default("ACTIVE")
+  status: customerStatusSchema.default("ACTIVE"),
+  creditDays: z.coerce.number().int().min(0).max(365).default(7),
+  creditLimit: z.coerce.number().finite().nonnegative().default(0),
+  creditStatus: z.enum(["active", "hold", "blocked"]).default("active")
 });
 
 export const customerUpdateSchema = customerCreateSchema

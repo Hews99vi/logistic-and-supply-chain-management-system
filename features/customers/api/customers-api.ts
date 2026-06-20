@@ -6,6 +6,8 @@ import type {
   CustomerListItem,
   CustomerListResponse,
   CustomerRouteProgramContextItem,
+  CustomerStatementDto,
+  UnmatchedCustomerOutletDto,
   CustomerStatus
 } from "@/features/customers/types";
 import { fetchCachedAuthSession, redirectToLoginOnUnauthorized } from "@/features/auth/api/session-cache";
@@ -21,6 +23,9 @@ type CustomerCreatePayload = {
   addressLine2?: string | null;
   city?: string | null;
   status: CustomerStatus;
+  creditDays: number;
+  creditLimit: number;
+  creditStatus: "active" | "hold" | "blocked";
 };
 
 type CustomerUpdatePayload = Partial<CustomerCreatePayload>;
@@ -40,7 +45,10 @@ function toCustomerPayload(values: CustomerFormValues): CustomerCreatePayload {
     addressLine1: normalizeOptionalText(values.addressLine1),
     addressLine2: normalizeOptionalText(values.addressLine2),
     city: normalizeOptionalText(values.city),
-    status: values.status
+    status: values.status,
+    creditDays: values.creditDays,
+    creditLimit: values.creditLimit,
+    creditStatus: values.creditStatus
   };
 }
 
@@ -173,4 +181,37 @@ export async function fetchCustomerRouteProgramContext(territory: string) {
 
   const data = await readEnvelope<RouteProgramsPayload>(response, "Failed to load related route program context.");
   return data.items;
+}
+
+export async function fetchCustomerStatement(customerId: string) {
+  const response = await fetch(`/api/customers/${customerId}/statement`, {
+    method: "GET",
+    credentials: "include",
+    cache: "no-store"
+  });
+
+  return readEnvelope<CustomerStatementDto>(response, "Failed to load customer statement.");
+}
+
+export async function fetchUnmatchedCustomers() {
+  const response = await fetch("/api/customers/unmatched", {
+    method: "GET",
+    credentials: "include",
+    cache: "no-store"
+  });
+
+  const data = await readEnvelope<{ items: UnmatchedCustomerOutletDto[] }>(response, "Failed to load unmatched customers.");
+  return data.items;
+}
+
+export async function resolveUnmatchedCustomer(matchId: string, payload: { action: "link" | "create" | "ignore"; customerId?: string | null }) {
+  const response = await fetch(`/api/customers/unmatched/${matchId}/resolve`, {
+    method: "PATCH",
+    credentials: "include",
+    cache: "no-store",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  return readEnvelope<unknown>(response, "Failed to resolve unmatched customer.");
 }

@@ -20,6 +20,11 @@ function formatCurrencyLkr(amount: number) {
 export function SummaryWidgets({ bundle, loading }: SummaryWidgetsProps) {
   const topProducts = bundle?.topProducts.slice(0, 3) ?? [];
   const paymentTotals = bundle?.overview.paymentModeTotals;
+  const creditAging = bundle?.creditAging;
+  const totalCashDifference = bundle?.routePerformance.reduce((sum, route) => sum + route.totalCashDifference, 0) ?? 0;
+  const pendingReportCount = bundle?.overview.reportCountByStatus
+    .filter((item) => item.status === "draft" || item.status === "submitted")
+    .reduce((sum, item) => sum + item.reportCount, 0) ?? 0;
 
   return (
     <section className="grid gap-4 lg:grid-cols-2">
@@ -77,6 +82,77 @@ export function SummaryWidgets({ bundle, loading }: SummaryWidgetsProps) {
               <div className="rounded-xl border border-slate-100 px-4 py-3">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Credit</p>
                 <p className="mt-1 break-words text-lg font-semibold text-slate-900">{formatCurrencyLkr(paymentTotals.totalCredit)}</p>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="lg:col-span-2">
+        <CardHeader className="pb-3">
+          <CardTitle>Finance Handover Watch</CardTitle>
+          <CardDescription>Cash, cheque, credit, and pending route-day pressure</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {loading ? (
+            Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-20 rounded-xl" />)
+          ) : (
+            <>
+              <div className="rounded-xl border border-slate-100 px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Cash Difference</p>
+                <p className={totalCashDifference === 0 ? "mt-1 text-lg font-semibold text-emerald-700" : "mt-1 text-lg font-semibold text-amber-700"}>
+                  {formatCurrencyLkr(totalCashDifference)}
+                </p>
+              </div>
+              <div className="rounded-xl border border-slate-100 px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Pending Route Days</p>
+                <p className="mt-1 text-lg font-semibold text-slate-900">{pendingReportCount}</p>
+              </div>
+              <div className="rounded-xl border border-slate-100 px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Cheque Exposure</p>
+                <p className="mt-1 text-lg font-semibold text-slate-900">{formatCurrencyLkr(paymentTotals?.totalCheques ?? 0)}</p>
+              </div>
+              <div className="rounded-xl border border-slate-100 px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Outstanding Credit</p>
+                <p className="mt-1 text-lg font-semibold text-slate-900">{formatCurrencyLkr(creditAging?.totals.outstandingAmount ?? 0)}</p>
+                <p className={(creditAging?.totals.overdueAmount ?? 0) > 0 ? "mt-1 text-xs font-semibold text-rose-700" : "mt-1 text-xs text-emerald-700"}>
+                  Overdue {formatCurrencyLkr(creditAging?.totals.overdueAmount ?? 0)}
+                </p>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="lg:col-span-2">
+        <CardHeader className="pb-3">
+          <CardTitle>Credit Aging Alerts</CardTitle>
+          <CardDescription>Due credit and overdue customer exposure</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-[1fr_1.2fr]">
+          {loading ? (
+            <>
+              <Skeleton className="h-32 rounded-xl" />
+              <Skeleton className="h-32 rounded-xl" />
+            </>
+          ) : (
+            <>
+              <div className="rounded-xl border border-slate-100 px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Due Today</p>
+                <p className="mt-1 text-xl font-bold text-amber-700">{formatCurrencyLkr(creditAging?.totals.dueTodayAmount ?? 0)}</p>
+                <p className="mt-1 text-sm text-slate-500">{creditAging?.totals.invoiceCount ?? 0} open credit invoice(s)</p>
+              </div>
+              <div className="rounded-xl border border-slate-100 px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Top Outstanding Customers</p>
+                <div className="mt-2 space-y-2">
+                  {(creditAging?.topCustomers ?? []).slice(0, 4).map((customer) => (
+                    <div key={customer.customerName} className="flex items-center justify-between gap-3 text-sm">
+                      <span className="truncate text-slate-700">{customer.customerName}</span>
+                      <span className="font-semibold text-slate-900">{formatCurrencyLkr(customer.outstandingAmount)}</span>
+                    </div>
+                  ))}
+                  {(creditAging?.topCustomers.length ?? 0) === 0 ? <p className="text-sm text-slate-500">No open credit exposure.</p> : null}
+                </div>
               </div>
             </>
           )}

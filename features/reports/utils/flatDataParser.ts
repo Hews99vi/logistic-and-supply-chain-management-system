@@ -145,7 +145,7 @@ function aggregateInvoices(
   // Group by InvoiceId
   const invoiceMap = new Map<
     string,
-    { cashAmount: number; chequeAmount: number; creditAmount: number }
+    { cashAmount: number; chequeAmount: number; creditAmount: number; outletName?: string }
   >();
 
   for (const row of invoiceRows) {
@@ -156,10 +156,13 @@ function aggregateInvoices(
     const paymentTerm = row.PaymentTerm?.trim().toLowerCase() || "cash";
 
     if (!invoiceMap.has(invoiceId)) {
-      invoiceMap.set(invoiceId, { cashAmount: 0, chequeAmount: 0, creditAmount: 0 });
+      invoiceMap.set(invoiceId, { cashAmount: 0, chequeAmount: 0, creditAmount: 0, outletName: row.OutletName?.trim() || undefined });
     }
 
     const entry = invoiceMap.get(invoiceId)!;
+    if (!entry.outletName && row.OutletName?.trim()) {
+      entry.outletName = row.OutletName.trim();
+    }
 
     if (paymentTerm === "cheque") {
       entry.chequeAmount += value;
@@ -179,6 +182,7 @@ function aggregateInvoices(
       cashAmount: round2(amounts.cashAmount),
       chequeAmount: round2(amounts.chequeAmount),
       creditAmount: round2(amounts.creditAmount),
+      notes: amounts.outletName,
     });
   }
 

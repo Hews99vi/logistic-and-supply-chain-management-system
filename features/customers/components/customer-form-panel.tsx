@@ -22,7 +22,10 @@ const customerFormSchema = z.object({
   addressLine1: z.string().trim().max(250).optional(),
   addressLine2: z.string().trim().max(250).optional(),
   city: z.string().trim().max(120).optional(),
-  status: z.enum(["ACTIVE", "INACTIVE"])
+  status: z.enum(["ACTIVE", "INACTIVE"]),
+  creditDays: z.coerce.number().int().min(0).max(365),
+  creditLimit: z.coerce.number().finite().nonnegative(),
+  creditStatus: z.enum(["active", "hold", "blocked"])
 });
 
 type CustomerFormPanelProps = {
@@ -148,6 +151,47 @@ export function CustomerFormPanel({
                 >
                   <option value="ACTIVE">Active</option>
                   <option value="INACTIVE">Inactive</option>
+                </select>
+              </label>
+
+              <label className="space-y-1">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Credit Days</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={365}
+                  value={formState.values.creditDays}
+                  onChange={(event) => onChange({ ...formState.values, creditDays: Number(event.target.value) })}
+                  className={`${inputClass} ${fieldErrors.creditDays ? "border-red-300" : "border-slate-200"}`}
+                  disabled={submitting}
+                />
+                {fieldErrors.creditDays ? <p className="text-xs text-red-600">{fieldErrors.creditDays}</p> : null}
+              </label>
+
+              <label className="space-y-1">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Credit Limit</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={formState.values.creditLimit}
+                  onChange={(event) => onChange({ ...formState.values, creditLimit: Number(event.target.value) })}
+                  className={`${inputClass} ${fieldErrors.creditLimit ? "border-red-300" : "border-slate-200"}`}
+                  disabled={submitting}
+                />
+                {fieldErrors.creditLimit ? <p className="text-xs text-red-600">{fieldErrors.creditLimit}</p> : null}
+              </label>
+
+              <label className="space-y-1">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Credit Status</span>
+                <select
+                  value={formState.values.creditStatus}
+                  onChange={(event) => onChange({ ...formState.values, creditStatus: event.target.value as CustomerFormValues["creditStatus"] })}
+                  className={`${inputClass} ${fieldErrors.creditStatus ? "border-red-300" : "border-slate-200"}`}
+                  disabled={submitting}
+                >
+                  <option value="active">Active</option>
+                  <option value="hold">Hold</option>
+                  <option value="blocked">Blocked</option>
                 </select>
               </label>
 

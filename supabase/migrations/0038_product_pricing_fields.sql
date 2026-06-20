@@ -1,8 +1,8 @@
 begin;
 
 alter table public.products
-  add column wholesale_price numeric(12, 2),
-  add column piece_margin numeric(12, 2);
+  add column if not exists wholesale_price numeric(12, 2),
+  add column if not exists piece_margin numeric(12, 2);
 
 -- Map the SKU from the product prices.pdf to populate prices
 update public.products

@@ -5,9 +5,9 @@ import { Clock3, Mail, MapPinned, Phone, Route, TriangleAlert } from "lucide-rea
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { fetchCustomerRouteProgramContext } from "@/features/customers/api/customers-api";
+import { fetchCustomerRouteProgramContext, fetchCustomerStatement } from "@/features/customers/api/customers-api";
 import { CustomerStatusBadge } from "@/features/customers/components/customer-status-badge";
-import type { CustomerListItem, CustomerRouteProgramContextItem } from "@/features/customers/types";
+import type { CustomerListItem, CustomerRouteProgramContextItem, CustomerStatementDto } from "@/features/customers/types";
 import { getDayLabel } from "@/features/route-programs/types";
 
 type CustomerPreviewDialogProps = {
@@ -29,8 +29,17 @@ function formatAddress(customer: CustomerListItem) {
   return [customer.address_line_1, customer.address_line_2].filter(Boolean).join(", ") || "-";
 }
 
+function formatCurrency(amount: number) {
+  return new Intl.NumberFormat("en-LK", {
+    style: "currency",
+    currency: "LKR",
+    maximumFractionDigits: 0
+  }).format(amount);
+}
+
 export function CustomerPreviewDialog({ customer, onClose }: CustomerPreviewDialogProps) {
   const [routes, setRoutes] = useState<CustomerRouteProgramContextItem[]>([]);
+  const [statement, setStatement] = useState<CustomerStatementDto | null>(null);
   const [contextLoading, setContextLoading] = useState(false);
   const [contextError, setContextError] = useState<string | null>(null);
 
@@ -72,6 +81,28 @@ export function CustomerPreviewDialog({ customer, onClose }: CustomerPreviewDial
     };
   }, [customer]);
 
+  useEffect(() => {
+    if (!customer) {
+      setStatement(null);
+      return;
+    }
+
+    let ignore = false;
+    const loadStatement = async () => {
+      try {
+        const nextStatement = await fetchCustomerStatement(customer.id);
+        if (!ignore) setStatement(nextStatement);
+      } catch {
+        if (!ignore) setStatement(null);
+      }
+    };
+
+    void loadStatement();
+    return () => {
+      ignore = true;
+    };
+  }, [customer]);
+
   if (!customer) {
     return null;
   }
@@ -97,6 +128,27 @@ export function CustomerPreviewDialog({ customer, onClose }: CustomerPreviewDial
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Status</p>
                 <div className="mt-1"><CustomerStatusBadge status={customer.status} /></div>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-4">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Credit Terms</p>
+                <p className="mt-1 font-medium text-slate-900">{customer.credit_days ?? 7} days</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Credit Limit</p>
+                <p className="mt-1 font-medium text-slate-900">{formatCurrency(customer.credit_limit ?? 0)}</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Outstanding</p>
+                <p className="mt-1 font-medium text-slate-900">{formatCurrency(statement?.totals.outstandingAmount ?? customer.outstanding_credit ?? 0)}</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Overdue</p>
+                <p className={(statement?.totals.overdueAmount ?? customer.overdue_credit ?? 0) > 0 ? "mt-1 font-medium text-rose-700" : "mt-1 font-medium text-slate-900"}>
+                  {formatCurrency(statement?.totals.overdueAmount ?? customer.overdue_credit ?? 0)}
+                </p>
               </div>
             </div>
 
@@ -178,8 +230,35 @@ export function CustomerPreviewDialog({ customer, onClose }: CustomerPreviewDial
             </div>
 
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Notes</p>
-              <p className="mt-1 font-medium text-slate-500">Not available in current backend contract.</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Recent Credit Invoices</p>
+              {statement?.creditInvoices.length ? (
+                <div className="mt-2 max-h-48 overflow-auto rounded-md border border-slate-200 bg-white">
+                  {statement.creditInvoices.slice(0, 8).map((invoice) => (
+                    <div key={invoice.id} className="grid grid-cols-[1fr_auto_auto] gap-3 border-b border-slate-100 px-3 py-2 last:border-b-0">
+                      <span className="font-medium text-slate-900">{invoice.invoiceNo}</span>
+                      <span className="text-slate-600">{invoice.agingBucket}</span>
+                      <span className="font-semibold text-slate-900">{formatCurrency(invoice.outstandingAmount)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-1 font-medium text-slate-500">No credit invoices found.</p>
+              )}
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Collections</p>
+                <p className="mt-1 font-medium text-slate-900">{statement?.collections.length ?? 0}</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Cheques</p>
+                <p className="mt-1 font-medium text-slate-900">{statement?.cheques.length ?? 0}</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Bills</p>
+                <p className="mt-1 font-medium text-slate-900">{statement?.bills.length ?? 0}</p>
+              </div>
             </div>
           </div>
 

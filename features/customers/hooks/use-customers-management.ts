@@ -6,6 +6,8 @@ import {
   createCustomer,
   fetchAuthSession,
   fetchCustomers,
+  fetchUnmatchedCustomers,
+  resolveUnmatchedCustomer,
   setCustomerActiveState,
   updateCustomer
 } from "@/features/customers/api/customers-api";
@@ -14,7 +16,8 @@ import type {
   CustomerFormState,
   CustomerFormValues,
   CustomerListItem,
-  CustomerStatus
+  CustomerStatus,
+  UnmatchedCustomerOutletDto
 } from "@/features/customers/types";
 
 const DEFAULT_FORM_VALUES: CustomerFormValues = {
@@ -26,7 +29,10 @@ const DEFAULT_FORM_VALUES: CustomerFormValues = {
   addressLine1: "",
   addressLine2: "",
   city: "",
-  status: "ACTIVE"
+  status: "ACTIVE",
+  creditDays: 7,
+  creditLimit: 0,
+  creditStatus: "active"
 };
 
 function toFormValues(customer: CustomerListItem): CustomerFormValues {
@@ -39,7 +45,10 @@ function toFormValues(customer: CustomerListItem): CustomerFormValues {
     addressLine1: customer.address_line_1 ?? "",
     addressLine2: customer.address_line_2 ?? "",
     city: customer.city ?? "",
-    status: customer.status
+    status: customer.status,
+    creditDays: customer.credit_days ?? 7,
+    creditLimit: customer.credit_limit ?? 0,
+    creditStatus: customer.credit_status ?? "active"
   };
 }
 
@@ -49,6 +58,7 @@ export function useCustomersManagement() {
     pageSize: 10
   });
   const [customers, setCustomers] = useState<CustomerListItem[]>([]);
+  const [unmatchedCustomers, setUnmatchedCustomers] = useState<UnmatchedCustomerOutletDto[]>([]);
   const [total, setTotal] = useState(0);
 
   const [loading, setLoading] = useState(true);
@@ -113,13 +123,23 @@ export function useCustomersManagement() {
     }
   }, []);
 
+  const loadUnmatchedCustomers = useCallback(async () => {
+    try {
+      const rows = await fetchUnmatchedCustomers();
+      setUnmatchedCustomers(rows);
+    } catch {
+      setUnmatchedCustomers([]);
+    }
+  }, []);
+
   useEffect(() => {
     void loadSession();
   }, [loadSession]);
 
   useEffect(() => {
     void loadCustomers(filters);
-  }, [filters, loadCustomers]);
+    void loadUnmatchedCustomers();
+  }, [filters, loadCustomers, loadUnmatchedCustomers]);
 
   const canManageCustomers = useMemo(() => {
     if (!isUserActive) return false;
@@ -229,12 +249,27 @@ export function useCustomersManagement() {
 
       setFormState(null);
       await loadCustomers(filters, true);
+      await loadUnmatchedCustomers();
     } catch (requestError) {
       setFormError(requestError instanceof Error ? requestError.message : "Failed to save customer.");
     } finally {
       setFormSubmitting(false);
     }
-  }, [canManageCustomers, filters, formState, loadCustomers]);
+  }, [canManageCustomers, filters, formState, loadCustomers, loadUnmatchedCustomers]);
+
+  const resolveUnmatched = useCallback(async (matchId: string, action: "create" | "ignore") => {
+    if (!canManageCustomers) return;
+    setError(null);
+    setSuccessMessage(null);
+    try {
+      await resolveUnmatchedCustomer(matchId, { action });
+      setSuccessMessage(action === "create" ? "Customer created from unmatched outlet." : "Unmatched outlet ignored.");
+      await loadUnmatchedCustomers();
+      await loadCustomers(filters, true);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Failed to resolve unmatched customer.");
+    }
+  }, [canManageCustomers, filters, loadCustomers, loadUnmatchedCustomers]);
 
   const requestCustomerStatusToggle = useCallback((customer: CustomerListItem) => {
     if (!canManageCustomers) return;
@@ -274,6 +309,7 @@ export function useCustomersManagement() {
   return {
     filters,
     customers,
+    unmatchedCustomers,
     total,
     loading,
     refreshing,
@@ -295,6 +331,7 @@ export function useCustomersManagement() {
     setPage,
     setPageSize,
     reload,
+    resolveUnmatched,
     openCreate,
     openPreview,
     closePreview,

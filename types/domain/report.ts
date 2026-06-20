@@ -59,6 +59,16 @@ export type DailyReportExpenseEntryDto = {
   expenseCategoryId: string | null;
   customExpenseName: string | null;
   amount: number;
+  paymentMethod: "cash" | "cheque" | "bank" | "credit" | "other";
+  paidBy: string | null;
+  receiptFilePath: string | null;
+  receiptFileName: string | null;
+  status: "draft" | "submitted" | "approved" | "rejected" | "void";
+  approvedBy: string | null;
+  approvedAt: string | null;
+  rejectedBy: string | null;
+  rejectedAt: string | null;
+  rejectionReason: string | null;
   notes: string | null;
   createdAt: string;
 };
@@ -143,6 +153,102 @@ export type DriverDeductionDto = {
   updatedAt: string;
 };
 
+export type ReportCashAdjustmentStatus = "pending" | "approved" | "rejected" | "void";
+
+export type ReportCashAdjustmentDto = {
+  id: string;
+  dailyReportId: string;
+  adjustmentType: "shortage" | "excess";
+  amount: number;
+  reason: string;
+  status: ReportCashAdjustmentStatus;
+  approvedBy: string | null;
+  approvedAt: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ReportChequeStatus = "received" | "deposited" | "realized" | "bounced" | "returned" | "cancelled";
+
+export type ReportChequeDto = {
+  id: string;
+  dailyReportId: string;
+  invoiceEntryId: string | null;
+  invoiceNo: string | null;
+  customerName: string | null;
+  chequeNo: string;
+  bankName: string;
+  branchName: string | null;
+  chequeDate: string | null;
+  receivedDate: string;
+  amount: number;
+  status: ReportChequeStatus;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CreditInvoiceStatus = "open" | "partially_paid" | "settled" | "written_off" | "disputed";
+
+export type CreditInvoiceDto = {
+  id: string;
+  organizationId: string;
+  dailyReportId: string | null;
+  invoiceEntryId: string | null;
+  creditAccountId: string | null;
+  invoiceNo: string;
+  customerName: string;
+  invoiceDate: string;
+  dueDate: string | null;
+  amount: number;
+  collectedAmount: number;
+  outstandingAmount: number;
+  status: CreditInvoiceStatus;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ReportBillStatus = "delivered" | "cancelled" | "returned" | "missing" | "disputed";
+
+export type ReportBillDto = {
+  id: string;
+  dailyReportId: string;
+  invoiceEntryId: string | null;
+  invoiceNo: string;
+  customerName: string | null;
+  amountSnapshot: number;
+  status: ReportBillStatus;
+  exceptionApprovedBy: string | null;
+  exceptionApprovedAt: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type DriverPayrollPeriodStatus = "draft" | "finalized" | "paid" | "void";
+
+export type DriverPayrollPeriodDto = {
+  id: string;
+  organizationId: string;
+  driverId: string;
+  periodStart: string;
+  periodEnd: string;
+  status: DriverPayrollPeriodStatus;
+  grossSalary: number;
+  allowances: number;
+  deductions: number;
+  advances: number;
+  netPayable: number;
+  paidAmount: number;
+  balancePayable: number;
+  finalizedBy: string | null;
+  finalizedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type DailyReportAttachmentDto = {
   filePath: string;
   fileName: string;
@@ -173,6 +279,10 @@ export type DailyReportDetailDto = {
   inventoryEntries: DailyReportInventoryEntryDto[];
   returnDamageEntries: DailyReportReturnDamageEntryDto[];
   driverDeductions: DriverDeductionDto[];
+  cashAdjustments: ReportCashAdjustmentDto[];
+  cheques: ReportChequeDto[];
+  creditInvoices: CreditInvoiceDto[];
+  bills: ReportBillDto[];
 };
 
 export type DailyReportListItemDto = DailyReportBaseDto;

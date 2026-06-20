@@ -1,5 +1,6 @@
 import type {
   DashboardDailyTrendDto,
+  DashboardCreditAgingDto,
   DashboardMostReturnedProductDto,
   DashboardOverviewDto,
   DashboardRoutePerformanceDto,
@@ -68,13 +69,14 @@ export async function fetchDashboardBundle(filters: DashboardFilters): Promise<D
   const query = toQueryString(filters);
   const suffix = query.length > 0 ? `?${query}` : "";
 
-  const [overview, salesByRoute, topProducts, mostReturnedProducts, dailyTrend, routePerformance, routeProgramTotal] = await Promise.all([
+  const [overview, salesByRoute, topProducts, mostReturnedProducts, dailyTrend, routePerformance, creditAging, routeProgramTotal] = await Promise.all([
     fetchEnvelope<DashboardOverviewDto>(`/api/dashboard${suffix}`),
     fetchEnvelope<{ items: DashboardSalesByRouteDto[] }>(`/api/dashboard/sales-by-route${suffix}`).then((d) => d.items),
     fetchEnvelope<{ items: DashboardTopProductSalesDto[] }>(`/api/dashboard/top-products${suffix}`).then((d) => d.items),
     fetchEnvelope<{ items: DashboardMostReturnedProductDto[] }>(`/api/dashboard/most-returned-products${suffix}`).then((d) => d.items),
     fetchEnvelope<{ items: DashboardDailyTrendDto[] }>(`/api/dashboard/daily-trend${suffix}`).then((d) => d.items),
     fetchEnvelope<{ items: DashboardRoutePerformanceDto[] }>(`/api/dashboard/route-performance${suffix}`).then((d) => d.items),
+    fetchEnvelope<DashboardCreditAgingDto>("/api/credits/aging"),
     fetchRouteProgramsTotal()
   ]);
 
@@ -85,6 +87,7 @@ export async function fetchDashboardBundle(filters: DashboardFilters): Promise<D
     mostReturnedProducts,
     dailyTrend,
     routePerformance,
+    creditAging,
     routeProgramTotal
   };
 }

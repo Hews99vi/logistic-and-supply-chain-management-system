@@ -17,6 +17,8 @@ type ReportSubmitChecklistInput = {
   cancelledBillCount: number;
   cashDifference: number;
   totalCash: number;
+  totalCheques: number;
+  totalCredit: number;
   cashInHand: number;
   cashPhysicalTotal: number;
   invoiceEntriesCount: number;
@@ -24,6 +26,11 @@ type ReportSubmitChecklistInput = {
   invalidInventoryCount: number;
   positiveVarianceCount: number;
   unresolvedMissingStockCount: number;
+  pendingExpenseCount: number;
+  unresolvedBillExceptionCount: number;
+  billLedgerCount: number;
+  chequeRegisterTotal: number;
+  creditLedgerTotal: number;
   denominationRowCount: number;
   denominationPositiveNoteCount: number;
 };
@@ -35,6 +42,11 @@ export function buildReportSubmitChecklist(input: ReportSubmitChecklistInput): R
   const inventoryQuantitiesValid = input.invalidInventoryCount === 0;
   const moreStockResolved = input.positiveVarianceCount === 0;
   const missingStockResolved = input.unresolvedMissingStockCount === 0;
+  const expensesApproved = input.pendingExpenseCount === 0;
+  const billsComplete = input.billLedgerCount === input.totalBillCount && input.billLedgerCount > 0;
+  const billExceptionsResolved = input.unresolvedBillExceptionCount === 0;
+  const chequesMatched = Math.abs(input.chequeRegisterTotal - input.totalCheques) < 0.01;
+  const creditsMatched = Math.abs(input.creditLedgerTotal - input.totalCredit) < 0.01;
   const hasRouteAndStaff = input.routeNameSnapshot.trim().length > 0 && input.staffName.trim().length > 0;
   const hasStandardDenominations = input.denominationRowCount === 10;
   const cashBalanced = Math.abs(input.cashDifference) < 0.0001;
@@ -93,6 +105,38 @@ export function buildReportSubmitChecklist(input: ReportSubmitChecklistInput): R
       blocking: true
     },
     {
+      key: "cheques",
+      label: "Cheque register matches invoices",
+      passed: chequesMatched,
+      message: chequesMatched ? "Cheque details match invoice cheque total." : "Cheque register total must match invoice cheque total.",
+      blocking: true
+    },
+    {
+      key: "credits",
+      label: "Credit ledger matches invoices",
+      passed: creditsMatched,
+      message: creditsMatched ? "Credit ledger matches invoice credit total." : "Credit ledger total must match invoice credit total.",
+      blocking: true
+    },
+    {
+      key: "bill-ledger",
+      label: "Physical bill ledger complete",
+      passed: billsComplete && billExceptionsResolved,
+      message: !billsComplete
+        ? "Bill ledger count must match total bill count."
+        : billExceptionsResolved
+          ? "Bill ledger has no unresolved exceptions."
+          : "Missing or disputed bills require approval.",
+      blocking: true
+    },
+    {
+      key: "expenses",
+      label: "Expenses approved",
+      passed: expensesApproved,
+      message: expensesApproved ? "No pending expense approvals." : "Approve, reject, or void pending expenses.",
+      blocking: true
+    },
+    {
       key: "denomination-rows",
       label: "Denomination sheet completed",
       passed: hasStandardDenominations,
@@ -148,6 +192,8 @@ export function buildReportSubmitChecklistFromEnvelope(report: ReportDetailEnvel
     cancelledBillCount: report.report.cancelledBillCount,
     cashDifference: report.report.cashDifference,
     totalCash: report.report.totalCash,
+    totalCheques: report.report.totalCheques,
+    totalCredit: report.report.totalCredit,
     cashInHand: report.report.cashInHand,
     cashPhysicalTotal: report.report.cashPhysicalTotal,
     invoiceEntriesCount: report.invoiceEntries.length,
@@ -155,6 +201,11 @@ export function buildReportSubmitChecklistFromEnvelope(report: ReportDetailEnvel
     invalidInventoryCount: report.inventoryEntries.filter((row) => row.salesQty > row.loadingQty || row.lorryQty < 0).length,
     positiveVarianceCount: report.inventoryEntries.filter((row) => row.varianceQty > 0).length,
     unresolvedMissingStockCount: report.driverDeductions.filter((row) => row.status === "pending").length,
+    pendingExpenseCount: report.expenseEntries.filter((row) => row.status === "draft" || row.status === "submitted").length,
+    unresolvedBillExceptionCount: report.bills.filter((row) => (row.status === "missing" || row.status === "disputed") && !row.exceptionApprovedAt).length,
+    billLedgerCount: report.bills.length,
+    chequeRegisterTotal: report.cheques.filter((row) => row.status !== "cancelled").reduce((sum, row) => sum + row.amount, 0),
+    creditLedgerTotal: report.creditInvoices.filter((row) => row.status !== "written_off").reduce((sum, row) => sum + row.amount, 0),
     denominationRowCount: report.cashDenominations.length,
     denominationPositiveNoteCount: report.cashDenominations.reduce(
       (count, row) => count + (row.noteCount > 0 ? 1 : 0),

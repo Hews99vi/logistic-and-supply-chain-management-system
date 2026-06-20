@@ -1,4 +1,4 @@
-﻿begin;
+begin;
 
 alter table public.daily_reports
   add column if not exists loading_completed_at timestamptz,

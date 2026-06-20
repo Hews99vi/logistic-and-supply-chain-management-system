@@ -16,6 +16,7 @@ as $$
   select split_part(object_name, '/', 1)::uuid = any(public.current_user_organization_ids());
 $$;
 
+drop policy if exists "organization_assets_read" on storage.objects;
 create policy "organization_assets_read"
 on storage.objects
 for select
@@ -25,6 +26,7 @@ using (
   and public.can_access_storage_object(name)
 );
 
+drop policy if exists "organization_assets_write" on storage.objects;
 create policy "organization_assets_write"
 on storage.objects
 for insert
@@ -34,6 +36,7 @@ with check (
   and public.can_access_storage_object(name)
 );
 
+drop policy if exists "organization_assets_update" on storage.objects;
 create policy "organization_assets_update"
 on storage.objects
 for update

@@ -13,6 +13,7 @@ import type { DailyReportListQuery } from "@/lib/validation/daily-report";
 import type {
   DailyReportBaseDto,
   DailyReportCashDenominationDto,
+  CreditInvoiceDto,
   DailyReportDetailDto,
   DailyReportExpenseEntryDto,
   DriverDeductionDto,
@@ -20,6 +21,9 @@ import type {
   DailyReportInvoiceEntryDto,
   DailyReportListItemDto,
   DailyReportReturnDamageEntryDto,
+  ReportBillDto,
+  ReportCashAdjustmentDto,
+  ReportChequeDto,
   DailyReportSummaryCardsDto
 } from "@/types/domain/report";
 
@@ -93,6 +97,16 @@ type NestedDailyReportRow = DailyReportRow & {
     expense_category_id: string | null;
     custom_expense_name: string | null;
     amount: number;
+    payment_method: "cash" | "cheque" | "bank" | "credit" | "other";
+    paid_by: string | null;
+    receipt_file_path: string | null;
+    receipt_file_name: string | null;
+    status: "draft" | "submitted" | "approved" | "rejected" | "void";
+    approved_by: string | null;
+    approved_at: string | null;
+    rejected_by: string | null;
+    rejected_at: string | null;
+    rejection_reason: string | null;
     notes: string | null;
     created_at: string;
   }> | null;
@@ -176,6 +190,68 @@ type NestedDailyReportRow = DailyReportRow & {
     created_at: string;
     updated_at: string;
   }> | null;
+  cash_adjustments: Array<{
+    id: string;
+    daily_report_id: string;
+    adjustment_type: "shortage" | "excess";
+    amount: number;
+    reason: string;
+    status: "pending" | "approved" | "rejected" | "void";
+    approved_by: string | null;
+    approved_at: string | null;
+    created_by: string | null;
+    created_at: string;
+    updated_at: string;
+  }> | null;
+  cheques: Array<{
+    id: string;
+    daily_report_id: string;
+    invoice_entry_id: string | null;
+    invoice_no: string | null;
+    customer_name: string | null;
+    cheque_no: string;
+    bank_name: string;
+    branch_name: string | null;
+    cheque_date: string | null;
+    received_date: string;
+    amount: number;
+    status: "received" | "deposited" | "realized" | "bounced" | "returned" | "cancelled";
+    notes: string | null;
+    created_at: string;
+    updated_at: string;
+  }> | null;
+  credit_invoices: Array<{
+    id: string;
+    organization_id: string;
+    daily_report_id: string | null;
+    invoice_entry_id: string | null;
+    credit_account_id: string | null;
+    invoice_no: string;
+    customer_name: string;
+    invoice_date: string;
+    due_date: string | null;
+    amount: number;
+    collected_amount: number;
+    outstanding_amount: number;
+    status: "open" | "partially_paid" | "settled" | "written_off" | "disputed";
+    notes: string | null;
+    created_at: string;
+    updated_at: string;
+  }> | null;
+  bills: Array<{
+    id: string;
+    daily_report_id: string;
+    invoice_entry_id: string | null;
+    invoice_no: string;
+    customer_name: string | null;
+    amount_snapshot: number;
+    status: "delivered" | "cancelled" | "returned" | "missing" | "disputed";
+    exception_approved_by: string | null;
+    exception_approved_at: string | null;
+    notes: string | null;
+    created_at: string;
+    updated_at: string;
+  }> | null;
 };
 
 const DAILY_REPORT_BASE_SELECT = `
@@ -238,6 +314,16 @@ const DAILY_REPORT_DETAIL_SELECT = `
     expense_category_id,
     custom_expense_name,
     amount,
+    payment_method,
+    paid_by,
+    receipt_file_path,
+    receipt_file_name,
+    status,
+    approved_by,
+    approved_at,
+    rejected_by,
+    rejected_at,
+    rejection_reason,
     notes,
     created_at
   ),
@@ -320,6 +406,68 @@ const DAILY_REPORT_DETAIL_SELECT = `
     settled_at,
     created_at,
     updated_at
+  ),
+  cash_adjustments:report_cash_adjustments (
+    id,
+    daily_report_id,
+    adjustment_type,
+    amount,
+    reason,
+    status,
+    approved_by,
+    approved_at,
+    created_by,
+    created_at,
+    updated_at
+  ),
+  cheques:report_cheques (
+    id,
+    daily_report_id,
+    invoice_entry_id,
+    invoice_no,
+    customer_name,
+    cheque_no,
+    bank_name,
+    branch_name,
+    cheque_date,
+    received_date,
+    amount,
+    status,
+    notes,
+    created_at,
+    updated_at
+  ),
+  credit_invoices:credit_invoices (
+    id,
+    organization_id,
+    daily_report_id,
+    invoice_entry_id,
+    credit_account_id,
+    invoice_no,
+    customer_name,
+    invoice_date,
+    due_date,
+    amount,
+    collected_amount,
+    outstanding_amount,
+    status,
+    notes,
+    created_at,
+    updated_at
+  ),
+  bills:report_bills (
+    id,
+    daily_report_id,
+    invoice_entry_id,
+    invoice_no,
+    customer_name,
+    amount_snapshot,
+    status,
+    exception_approved_by,
+    exception_approved_at,
+    notes,
+    created_at,
+    updated_at
   )
 `.replace(/\s+/g, " ").trim();
 
@@ -387,6 +535,16 @@ function mapExpenseEntries(rows: NestedDailyReportRow["expense_entries"]): Daily
     expenseCategoryId: row.expense_category_id,
     customExpenseName: row.custom_expense_name,
     amount: row.amount,
+    paymentMethod: row.payment_method ?? "cash",
+    paidBy: row.paid_by,
+    receiptFilePath: row.receipt_file_path,
+    receiptFileName: row.receipt_file_name,
+    status: row.status ?? "approved",
+    approvedBy: row.approved_by,
+    approvedAt: row.approved_at,
+    rejectedBy: row.rejected_by,
+    rejectedAt: row.rejected_at,
+    rejectionReason: row.rejection_reason,
     notes: row.notes,
     createdAt: row.created_at
   }));
@@ -479,6 +637,80 @@ function mapDriverDeductions(rows: NestedDailyReportRow["driver_deductions"]): D
     waivedBy: row.waived_by,
     waivedAt: row.waived_at,
     settledAt: row.settled_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  }));
+}
+
+function mapCashAdjustments(rows: NestedDailyReportRow["cash_adjustments"]): ReportCashAdjustmentDto[] {
+  return (rows ?? []).map((row) => ({
+    id: row.id,
+    dailyReportId: row.daily_report_id,
+    adjustmentType: row.adjustment_type,
+    amount: row.amount,
+    reason: row.reason,
+    status: row.status,
+    approvedBy: row.approved_by,
+    approvedAt: row.approved_at,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  }));
+}
+
+function mapCheques(rows: NestedDailyReportRow["cheques"]): ReportChequeDto[] {
+  return (rows ?? []).map((row) => ({
+    id: row.id,
+    dailyReportId: row.daily_report_id,
+    invoiceEntryId: row.invoice_entry_id,
+    invoiceNo: row.invoice_no,
+    customerName: row.customer_name,
+    chequeNo: row.cheque_no,
+    bankName: row.bank_name,
+    branchName: row.branch_name,
+    chequeDate: row.cheque_date,
+    receivedDate: row.received_date,
+    amount: row.amount,
+    status: row.status,
+    notes: row.notes,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  }));
+}
+
+function mapCreditInvoices(rows: NestedDailyReportRow["credit_invoices"]): CreditInvoiceDto[] {
+  return (rows ?? []).map((row) => ({
+    id: row.id,
+    organizationId: row.organization_id,
+    dailyReportId: row.daily_report_id,
+    invoiceEntryId: row.invoice_entry_id,
+    creditAccountId: row.credit_account_id,
+    invoiceNo: row.invoice_no,
+    customerName: row.customer_name,
+    invoiceDate: row.invoice_date,
+    dueDate: row.due_date,
+    amount: row.amount,
+    collectedAmount: row.collected_amount,
+    outstandingAmount: row.outstanding_amount,
+    status: row.status,
+    notes: row.notes,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  }));
+}
+
+function mapBills(rows: NestedDailyReportRow["bills"]): ReportBillDto[] {
+  return (rows ?? []).map((row) => ({
+    id: row.id,
+    dailyReportId: row.daily_report_id,
+    invoiceEntryId: row.invoice_entry_id,
+    invoiceNo: row.invoice_no,
+    customerName: row.customer_name,
+    amountSnapshot: row.amount_snapshot,
+    status: row.status,
+    exceptionApprovedBy: row.exception_approved_by,
+    exceptionApprovedAt: row.exception_approved_at,
+    notes: row.notes,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   }));
@@ -764,7 +996,11 @@ export class DailyReportService {
       cashDenominations: mapCashDenominations(data.cash_denominations),
       inventoryEntries: mapInventoryEntries(data.inventory_entries),
       returnDamageEntries: mapReturnDamageEntries(data.return_damage_entries),
-      driverDeductions: mapDriverDeductions(data.driver_deductions)
+      driverDeductions: mapDriverDeductions(data.driver_deductions),
+      cashAdjustments: mapCashAdjustments(data.cash_adjustments),
+      cheques: mapCheques(data.cheques),
+      creditInvoices: mapCreditInvoices(data.credit_invoices),
+      bills: mapBills(data.bills)
     };
 
     return successResponse(response);
@@ -1085,8 +1321,6 @@ export class DailyReportService {
     return successResponse(summary);
   }
 }
-
-
 
 
 

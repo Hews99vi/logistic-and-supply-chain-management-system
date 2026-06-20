@@ -1,5 +1,6 @@
 import type {
   DashboardDailyTrendDto,
+  DashboardCreditAgingDto,
   DashboardMostReturnedProductDto,
   DashboardOverviewDto,
   DashboardRoutePerformanceDto,
@@ -58,6 +59,7 @@ export type DashboardDataBundle = {
   mostReturnedProducts: DashboardMostReturnedProductDto[];
   dailyTrend: DashboardDailyTrendDto[];
   routePerformance: DashboardRoutePerformanceDto[];
+  creditAging: DashboardCreditAgingDto;
   routeProgramTotal: number;
 };
 

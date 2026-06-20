@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Save, Trash2 } from "lucide-react";
+import { Plus, Save, Tag, Trash2 } from "lucide-react";
 
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,7 @@ type ReportExpenseEntriesPanelProps = {
   error: string | null;
   canEdit: boolean;
   onSave: (items: ReportExpenseBatchSaveItemInput[]) => Promise<void>;
+  onCreateCategory?: (categoryName: string) => Promise<ExpenseCategoryOption>;
 };
 
 const moneyFormat = new Intl.NumberFormat("en-LK", {
@@ -90,10 +91,15 @@ export function ReportExpenseEntriesPanel({
   saving,
   error,
   canEdit,
-  onSave
+  onSave,
+  onCreateCategory
 }: ReportExpenseEntriesPanelProps) {
   const [editableRows, setEditableRows] = useState<EditableExpenseRow[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, RowErrors>>({});
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [categorySaving, setCategorySaving] = useState(false);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [categoryMessage, setCategoryMessage] = useState<string | null>(null);
 
   useEffect(() => {
     setEditableRows(rows.map(toEditableRow));
@@ -188,6 +194,42 @@ export function ReportExpenseEntriesPanel({
     await onSave(payload);
   };
 
+  const handleCreateCategory = async () => {
+    const cleanedName = newCategoryName.trim();
+    setCategoryError(null);
+    setCategoryMessage(null);
+
+    if (cleanedName.length < 2) {
+      setCategoryError("Enter a category name with at least 2 characters.");
+      return;
+    }
+
+    if (!onCreateCategory) {
+      setCategoryError("Category creation is not available here.");
+      return;
+    }
+
+    setCategorySaving(true);
+    try {
+      const createdCategory = await onCreateCategory(cleanedName);
+      setNewCategoryName("");
+      setCategoryMessage(`${createdCategory.categoryName} added.`);
+
+      setEditableRows((previous) => {
+        const firstEmptyIndex = previous.findIndex((row) => !row.expenseCategoryId.trim() && !row.customExpenseName.trim());
+        if (firstEmptyIndex === -1) return previous;
+
+        return previous.map((row, index) => (
+          index === firstEmptyIndex ? { ...row, expenseCategoryId: createdCategory.id } : row
+        ));
+      });
+    } catch (requestError) {
+      setCategoryError(requestError instanceof Error ? requestError.message : "Failed to create expense category.");
+    } finally {
+      setCategorySaving(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader className="gap-3">
@@ -212,10 +254,46 @@ export function ReportExpenseEntriesPanel({
 
       <CardContent className="space-y-4">
         {error ? <Alert variant="destructive">{error}</Alert> : null}
+        {categoryError ? <Alert variant="destructive">{categoryError}</Alert> : null}
+        {categoryMessage ? <Alert className="border-emerald-200 bg-emerald-50 text-emerald-700">{categoryMessage}</Alert> : null}
 
         {!canEdit ? (
           <Alert>Expense entries are read-only because this report is no longer in draft.</Alert>
         ) : null}
+
+        <div className="rounded-xl border border-slate-200 bg-white p-3 print:hidden">
+          <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
+            <label className="block space-y-1.5">
+              <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Add Expense Category</span>
+              <input
+                value={newCategoryName}
+                onChange={(event) => {
+                  setNewCategoryName(event.target.value);
+                  setCategoryError(null);
+                  setCategoryMessage(null);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void handleCreateCategory();
+                  }
+                }}
+                className="h-11 w-full rounded-md border border-slate-200 px-3 text-sm outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-200 disabled:bg-slate-100"
+                disabled={!canEdit || saving || loading || categorySaving}
+                placeholder="Fuel, maintenance, tolls..."
+              />
+            </label>
+            <Button
+              className="w-full lg:w-auto"
+              variant="outline"
+              onClick={handleCreateCategory}
+              disabled={!canEdit || saving || loading || categorySaving || !onCreateCategory}
+            >
+              <Tag className={`h-4 w-4 ${categorySaving ? "animate-pulse" : ""}`} />
+              Add Category
+            </Button>
+          </div>
+        </div>
 
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
           <p className="text-xs uppercase tracking-wider text-slate-500">Total Expenses</p>

@@ -147,39 +147,46 @@ alter table public.depots enable row level security;
 alter table public.products enable row level security;
 alter table public.customers enable row level security;
 
+drop policy if exists "organizations_select_by_membership" on public.organizations;
 create policy "organizations_select_by_membership"
 on public.organizations
 for select
 using (id = any(public.current_user_organization_ids()));
 
+drop policy if exists "profiles_select_own_record" on public.profiles;
 create policy "profiles_select_own_record"
 on public.profiles
 for select
 using (id = auth.uid());
 
+drop policy if exists "profiles_update_own_record" on public.profiles;
 create policy "profiles_update_own_record"
 on public.profiles
 for update
 using (id = auth.uid())
 with check (id = auth.uid());
 
+drop policy if exists "memberships_select_own_orgs" on public.organization_memberships;
 create policy "memberships_select_own_orgs"
 on public.organization_memberships
 for select
 using (organization_id = any(public.current_user_organization_ids()));
 
+drop policy if exists "depots_access_by_membership" on public.depots;
 create policy "depots_access_by_membership"
 on public.depots
 for all
 using (organization_id = any(public.current_user_organization_ids()))
 with check (organization_id = any(public.current_user_organization_ids()));
 
+drop policy if exists "products_access_by_membership" on public.products;
 create policy "products_access_by_membership"
 on public.products
 for all
 using (organization_id = any(public.current_user_organization_ids()))
 with check (organization_id = any(public.current_user_organization_ids()));
 
+drop policy if exists "customers_access_by_membership" on public.customers;
 create policy "customers_access_by_membership"
 on public.customers
 for all

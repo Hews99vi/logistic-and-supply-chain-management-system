@@ -104,6 +104,18 @@ export class FlatDataImportService {
       return mapImportError(error);
     }
 
+    await (supabase as never as {
+      rpc: (name: string, params: Record<string, unknown>) => Promise<unknown>;
+    }).rpc("sync_finance_ledgers_for_report", {
+      target_daily_report_id: parsedReportId.data
+    });
+
+    await (supabase as never as {
+      rpc: (name: string, params: Record<string, unknown>) => Promise<unknown>;
+    }).rpc("recalculate_daily_report_totals", {
+      target_daily_report_id: parsedReportId.data
+    });
+
     return successResponse(data);
   }
 }

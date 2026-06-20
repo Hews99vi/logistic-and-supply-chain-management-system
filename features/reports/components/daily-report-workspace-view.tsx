@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { DashboardSidebar } from "@/features/dashboard/components/dashboard-sidebar";
 import {
+  createExpenseCategoryOption,
   fetchExpenseCategoryOptions,
   fetchProductOptions,
   fetchReportCashDenominations,
@@ -19,8 +20,15 @@ import {
   fetchReportAuditTrail,
   fetchReportInvoiceEntries,
   fetchReportReturnDamageEntries,
+  approveReportBillException,
+  approveReportExpense,
+  resolveReportCashAdjustment,
+  saveReportBills,
+  saveReportCashAdjustments,
+  saveReportCheques,
   saveReportCashDenominations,
   importFlatDataReport,
+  postCreditInvoiceCollection,
   uploadReportAttachment,
   deleteReportAttachment,
   saveReportExpenseEntries,
@@ -35,6 +43,7 @@ import { ReportAttachmentsPanel } from "@/features/reports/components/report-att
 import { ReportAuditTrailPanel } from "@/features/reports/components/report-audit-trail-panel";
 import { ReportExpenseEntriesPanel } from "@/features/reports/components/report-expense-entries-panel";
 import { ReportFinalSummaryPanel } from "@/features/reports/components/report-final-summary-panel";
+import { ReportFinanceHandoverPanel } from "@/features/reports/components/report-finance-handover-panel";
 import { ReportInventoryEntriesPanel } from "@/features/reports/components/report-inventory-entries-panel";
 import { ReportInvoiceEntriesPanel } from "@/features/reports/components/report-invoice-entries-panel";
 import { ReportReturnDamageEntriesPanel } from "@/features/reports/components/report-return-damage-entries-panel";
@@ -46,12 +55,15 @@ import type {
   ExpenseCategoryOption,
   ProductOption,
   ReportExpenseBatchSaveItemInput,
+  ReportBillSaveItemInput,
+  ReportCashAdjustmentSaveItemInput,
+  ReportChequeSaveItemInput,
   ReportInventoryBatchSaveItemInput,
   ReportInvoiceBatchSaveItemInput,
   ReportReturnDamageBatchSaveItemInput,
   ReportWorkspaceTabKey
 } from "@/features/reports/types";
-import type { DailyReportInventoryEntryDto, DailyReportReturnDamageEntryDto } from "@/types/domain/report";
+import type { DailyReportExpenseEntryDto, DailyReportInventoryEntryDto, DailyReportReturnDamageEntryDto } from "@/types/domain/report";
 
 function formatCurrencyLkr(amount: number) {
   return new Intl.NumberFormat("en-LK", {
@@ -110,15 +122,7 @@ export function DailyReportWorkspaceView({ reportId }: { reportId: string }) {
   const [invoiceSaving, setInvoiceSaving] = useState(false);
   const [invoiceError, setInvoiceError] = useState<string | null>(null);
 
-  const [expenseRows, setExpenseRows] = useState<Array<{
-    id: string;
-    lineNo: number;
-    expenseCategoryId: string | null;
-    customExpenseName: string | null;
-    amount: number;
-    notes: string | null;
-    createdAt: string;
-  }>>([]);
+  const [expenseRows, setExpenseRows] = useState<DailyReportExpenseEntryDto[]>([]);
   const [expenseCategories, setExpenseCategories] = useState<ExpenseCategoryOption[]>([]);
   const [expenseLoading, setExpenseLoading] = useState(false);
   const [expenseSaving, setExpenseSaving] = useState(false);
@@ -167,6 +171,8 @@ export function DailyReportWorkspaceView({ reportId }: { reportId: string }) {
   const [cashLoading, setCashLoading] = useState(false);
   const [cashSaving, setCashSaving] = useState(false);
   const [cashError, setCashError] = useState<string | null>(null);
+  const [financeSaving, setFinanceSaving] = useState(false);
+  const [financeError, setFinanceError] = useState<string | null>(null);
 
   const report = detail?.report;
 
@@ -312,6 +318,11 @@ export function DailyReportWorkspaceView({ reportId }: { reportId: string }) {
       void loadExpenseData();
     }
 
+    if (activeTab === "finance" && report) {
+      void loadExpenseData();
+      void loadCashRows();
+    }
+
     if (activeTab === "inventory" && report) {
       void loadInventoryData();
     }
@@ -421,6 +432,18 @@ export function DailyReportWorkspaceView({ reportId }: { reportId: string }) {
     }
   }, [loadExpenseData, reload, report]);
 
+  const handleCreateExpenseCategory = useCallback(async (categoryName: string) => {
+    const createdCategory = await createExpenseCategoryOption(categoryName);
+    setExpenseCategories((previous) => {
+      const next = previous.some((category) => category.id === createdCategory.id)
+        ? previous
+        : [...previous, createdCategory];
+
+      return next.sort((left, right) => left.categoryName.localeCompare(right.categoryName));
+    });
+    return createdCategory;
+  }, []);
+
   const handleSaveInventoryRows = useCallback(async (items: ReportInventoryBatchSaveItemInput[]) => {
     if (!report) return;
 
@@ -516,6 +539,111 @@ export function DailyReportWorkspaceView({ reportId }: { reportId: string }) {
     await actions.submit();
     await loadCashRows();
   }, [actions, loadCashRows]);
+
+  const handleSaveCheques = useCallback(async (items: ReportChequeSaveItemInput[]) => {
+    if (!report) return;
+    setFinanceSaving(true);
+    setFinanceError(null);
+    try {
+      await saveReportCheques(report.id, items);
+      await reload();
+    } catch (requestError) {
+      setFinanceError(requestError instanceof Error ? requestError.message : "Failed to save cheque register.");
+    } finally {
+      setFinanceSaving(false);
+    }
+  }, [reload, report]);
+
+  const handleSaveBills = useCallback(async (items: ReportBillSaveItemInput[]) => {
+    if (!report) return;
+    setFinanceSaving(true);
+    setFinanceError(null);
+    try {
+      await saveReportBills(report.id, items);
+      await reload();
+    } catch (requestError) {
+      setFinanceError(requestError instanceof Error ? requestError.message : "Failed to save bill ledger.");
+    } finally {
+      setFinanceSaving(false);
+    }
+  }, [reload, report]);
+
+  const handleSaveCashAdjustments = useCallback(async (items: ReportCashAdjustmentSaveItemInput[]) => {
+    if (!report) return;
+    setFinanceSaving(true);
+    setFinanceError(null);
+    try {
+      await saveReportCashAdjustments(report.id, items);
+      await reload();
+      await loadCashRows();
+    } catch (requestError) {
+      setFinanceError(requestError instanceof Error ? requestError.message : "Failed to save cash adjustments.");
+    } finally {
+      setFinanceSaving(false);
+    }
+  }, [loadCashRows, reload, report]);
+
+  const handleApproveBillException = useCallback(async (billId: string) => {
+    if (!report) return;
+    setFinanceSaving(true);
+    setFinanceError(null);
+    try {
+      await approveReportBillException(report.id, billId);
+      await reload();
+    } catch (requestError) {
+      setFinanceError(requestError instanceof Error ? requestError.message : "Failed to approve bill exception.");
+    } finally {
+      setFinanceSaving(false);
+    }
+  }, [reload, report]);
+
+  const handleResolveCashAdjustment = useCallback(async (adjustmentId: string, nextStatus: "approved" | "rejected" | "void") => {
+    if (!report) return;
+    setFinanceSaving(true);
+    setFinanceError(null);
+    try {
+      await resolveReportCashAdjustment(report.id, adjustmentId, nextStatus);
+      await reload();
+      await loadCashRows();
+    } catch (requestError) {
+      setFinanceError(requestError instanceof Error ? requestError.message : "Failed to resolve cash adjustment.");
+    } finally {
+      setFinanceSaving(false);
+    }
+  }, [loadCashRows, reload, report]);
+
+  const handlePostCreditCollection = useCallback(async (creditInvoiceId: string, amount: number) => {
+    if (!report) return;
+    setFinanceSaving(true);
+    setFinanceError(null);
+    try {
+      await postCreditInvoiceCollection(creditInvoiceId, {
+        amount,
+        paymentMethod: "cash",
+        notes: `Collected from route-day report ${report.id}`
+      });
+      await reload();
+    } catch (requestError) {
+      setFinanceError(requestError instanceof Error ? requestError.message : "Failed to post credit collection.");
+    } finally {
+      setFinanceSaving(false);
+    }
+  }, [reload, report]);
+
+  const handleApproveExpense = useCallback(async (expenseId: string, nextStatus: "approved" | "rejected" | "void") => {
+    if (!report) return;
+    setFinanceSaving(true);
+    setFinanceError(null);
+    try {
+      await approveReportExpense(report.id, expenseId, { status: nextStatus });
+      await reload();
+      await loadExpenseData();
+    } catch (requestError) {
+      setFinanceError(requestError instanceof Error ? requestError.message : "Failed to update expense approval.");
+    } finally {
+      setFinanceSaving(false);
+    }
+  }, [loadExpenseData, reload, report]);
 
   const summaryFacts = useMemo(() => {
     if (!report) return null;
@@ -726,6 +854,28 @@ export function DailyReportWorkspaceView({ reportId }: { reportId: string }) {
             />
           ) : null}
 
+          {activeTab === "finance" ? (
+            <ReportFinanceHandoverPanel
+              report={report}
+              expenses={expenseRows.length > 0 ? expenseRows : detail.expenseEntries}
+              cheques={detail.cheques}
+              bills={detail.bills}
+              creditInvoices={detail.creditInvoices}
+              cashAdjustments={detail.cashAdjustments}
+              saving={financeSaving || saving}
+              error={financeError}
+              canEdit={canEditFinance}
+              canApprove={canApprove}
+              onSaveCheques={handleSaveCheques}
+              onSaveBills={handleSaveBills}
+              onSaveCashAdjustments={handleSaveCashAdjustments}
+              onApproveBillException={handleApproveBillException}
+              onResolveCashAdjustment={handleResolveCashAdjustment}
+              onPostCreditCollection={handlePostCreditCollection}
+              onApproveExpense={handleApproveExpense}
+            />
+          ) : null}
+
           {activeTab === "expenses" ? (
             <ReportExpenseEntriesPanel
               rows={expenseRows}
@@ -735,6 +885,7 @@ export function DailyReportWorkspaceView({ reportId }: { reportId: string }) {
               error={expenseError}
               canEdit={canEditFinance}
               onSave={handleSaveExpenseRows}
+              onCreateCategory={handleCreateExpenseCategory}
             />
           ) : null}
 

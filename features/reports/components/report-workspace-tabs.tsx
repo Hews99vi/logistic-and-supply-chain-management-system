@@ -6,6 +6,7 @@ import type { ReportWorkspaceTabKey } from "@/features/reports/types";
 const tabs: Array<{ key: ReportWorkspaceTabKey; label: string }> = [
   { key: "overview", label: "Route-Day Overview" },
   { key: "flat-data", label: "Flat Data" },
+  { key: "finance", label: "Finance Handover" },
   { key: "invoices", label: "Invoices" },
   { key: "expenses", label: "Expenses" },
   { key: "cash-check", label: "Cash Check" },

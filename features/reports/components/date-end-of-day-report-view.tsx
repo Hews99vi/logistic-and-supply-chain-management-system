@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { DashboardSidebar } from "@/features/dashboard/components/dashboard-sidebar";
 import {
+  createExpenseCategoryOption,
   fetchExpenseCategoryOptions,
   fetchReportCashDenominations,
   fetchReportExpenseEntries,
@@ -420,6 +421,18 @@ export function DateEndOfDayReportView({ reportId }: { reportId: string }) {
     }
   };
 
+  const handleCreateExpenseCategory = async (categoryName: string) => {
+    const createdCategory = await createExpenseCategoryOption(categoryName);
+    setExpenseCategories((previous) => {
+      const next = previous.some((category) => category.id === createdCategory.id)
+        ? previous
+        : [...previous, createdCategory];
+
+      return next.sort((left, right) => left.categoryName.localeCompare(right.categoryName));
+    });
+    return createdCategory;
+  };
+
   const handleSaveCashRows = async (items: Array<{ denominationValue: number; noteCount: number }>) => {
     if (!report) return;
 
@@ -464,6 +477,8 @@ export function DateEndOfDayReportView({ reportId }: { reportId: string }) {
       cancelledBillCount: parseNonNegativeInteger(form.cancelledBillCount) ?? 0,
       cashDifference: report.cashDifference,
       totalCash: report.totalCash,
+      totalCheques: report.totalCheques,
+      totalCredit: report.totalCredit,
       cashInHand: parseNonNegativeNumber(form.cashInHand) ?? 0,
       cashPhysicalTotal: report.cashPhysicalTotal,
       invoiceEntriesCount: invoiceRows.length,
@@ -471,10 +486,15 @@ export function DateEndOfDayReportView({ reportId }: { reportId: string }) {
       invalidInventoryCount: detail?.inventoryEntries.filter((row) => row.salesQty > row.loadingQty || row.lorryQty < 0).length ?? 0,
       positiveVarianceCount: detail?.inventoryEntries.filter((row) => row.varianceQty > 0).length ?? 0,
       unresolvedMissingStockCount: detail?.driverDeductions.filter((row) => row.status === "pending").length ?? 0,
+      pendingExpenseCount: detail?.expenseEntries.filter((row) => row.status === "draft" || row.status === "submitted").length ?? 0,
+      unresolvedBillExceptionCount: detail?.bills.filter((row) => (row.status === "missing" || row.status === "disputed") && !row.exceptionApprovedAt).length ?? 0,
+      billLedgerCount: detail?.bills.length ?? 0,
+      chequeRegisterTotal: detail?.cheques.filter((row) => row.status !== "cancelled").reduce((sum, row) => sum + row.amount, 0) ?? 0,
+      creditLedgerTotal: detail?.creditInvoices.filter((row) => row.status !== "written_off").reduce((sum, row) => sum + row.amount, 0) ?? 0,
       denominationRowCount: cashRows.length,
       denominationPositiveNoteCount: cashRows.reduce((count, row) => count + (row.noteCount > 0 ? 1 : 0), 0)
     });
-  }, [cashRows, detail?.driverDeductions, detail?.inventoryEntries, form, invoiceRows, report]);
+  }, [cashRows, detail?.bills, detail?.cheques, detail?.creditInvoices, detail?.driverDeductions, detail?.expenseEntries, detail?.inventoryEntries, form, invoiceRows, report]);
   const submitBlockingFailures = submitChecklist.filter((item) => item.blocking && !item.passed);
   const canSubmitFromDateSheet = canSubmit && submitBlockingFailures.length === 0;
 
@@ -688,6 +708,7 @@ export function DateEndOfDayReportView({ reportId }: { reportId: string }) {
               error={expenseError}
               canEdit={canEditDateSheet}
               onSave={handleSaveExpenseRows}
+              onCreateCategory={handleCreateExpenseCategory}
             />
           </section>
 
@@ -999,9 +1020,6 @@ export function DateEndOfDayReportView({ reportId }: { reportId: string }) {
           </div>      </AppShell>
   );
 }
-
-
-
 
 
 

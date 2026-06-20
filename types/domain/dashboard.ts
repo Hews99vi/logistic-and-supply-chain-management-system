@@ -75,3 +75,21 @@ export type DashboardRoutePerformanceDto = {
   averageNetProfitPerReport: number;
   totalCashDifference: number;
 };
+
+export type DashboardCreditAgingDto = {
+  buckets: Array<{
+    bucket: string;
+    invoiceCount: number;
+    outstandingAmount: number;
+  }>;
+  topCustomers: Array<{
+    customerName: string;
+    outstandingAmount: number;
+  }>;
+  totals: {
+    invoiceCount: number;
+    outstandingAmount: number;
+    overdueAmount: number;
+    dueTodayAmount: number;
+  };
+};

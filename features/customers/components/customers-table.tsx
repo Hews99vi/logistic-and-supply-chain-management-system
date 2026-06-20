@@ -18,6 +18,14 @@ function formatDateTime(value: string) {
   }).format(new Date(value));
 }
 
+function formatCurrency(amount: number) {
+  return new Intl.NumberFormat("en-LK", {
+    style: "currency",
+    currency: "LKR",
+    maximumFractionDigits: 0
+  }).format(amount);
+}
+
 type CustomersTableProps = {
   customers: CustomerListItem[];
   loading: boolean;
@@ -63,6 +71,7 @@ export function CustomersTable({
                 <th className="px-5 py-4 font-semibold">Contact Number</th>
                 <th className="px-5 py-4 font-semibold">Address</th>
                 <th className="px-5 py-4 font-semibold">Assigned Territory / Route</th>
+                <th className="px-5 py-4 text-right font-semibold">Credit</th>
                 <th className="px-5 py-4 font-semibold">Status</th>
                 <th className="px-5 py-4 font-semibold">Updated At</th>
                 <th className="px-5 py-4 text-right font-semibold">Actions</th>
@@ -73,12 +82,12 @@ export function CustomersTable({
               {loading ? (
                 Array.from({ length: pageSize }).map((_, index) => (
                   <tr key={index}>
-                    <td className="px-5 py-4" colSpan={8}><Skeleton className="h-10 w-full" /></td>
+                    <td className="px-5 py-4" colSpan={9}><Skeleton className="h-10 w-full" /></td>
                   </tr>
                 ))
               ) : customers.length === 0 ? (
                 <tr>
-                  <td className="px-5 py-12 text-center text-slate-500" colSpan={8}>
+                  <td className="px-5 py-12 text-center text-slate-500" colSpan={9}>
                     No customers found for the selected filters.
                   </td>
                 </tr>
@@ -96,6 +105,14 @@ export function CustomersTable({
                       {customer.address_line_2 ? <p className="truncate text-xs text-slate-500" title={customer.address_line_2}>{customer.address_line_2}</p> : null}
                     </td>
                     <td className="px-5 py-4">{customer.city ?? "-"}</td>
+                    <td className="px-5 py-4 text-right">
+                      <p className={customer.overdue_credit && customer.overdue_credit > 0 ? "font-semibold text-rose-700" : "font-semibold text-slate-900"}>
+                        {formatCurrency(customer.outstanding_credit ?? 0)}
+                      </p>
+                      <p className="text-xs capitalize text-slate-500">
+                        {customer.credit_status ?? "active"} / {customer.credit_days ?? 7} days
+                      </p>
+                    </td>
                     <td className="px-5 py-4"><CustomerStatusBadge status={customer.status} /></td>
                     <td className="px-5 py-4 text-slate-500">{formatDateTime(customer.updated_at)}</td>
                     <td className="px-5 py-4">

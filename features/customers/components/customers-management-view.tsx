@@ -24,6 +24,7 @@ export function CustomersManagementView() {
   const {
     filters,
     customers,
+    unmatchedCustomers,
     total,
     loading,
     refreshing,
@@ -45,6 +46,7 @@ export function CustomersManagementView() {
     setPage,
     setPageSize,
     reload,
+    resolveUnmatched,
     openCreate,
     openPreview,
     closePreview,
@@ -84,6 +86,38 @@ export function CustomersManagementView() {
           <CheckCircle2 className="h-4 w-4" />
           <span>{successMessage}</span>
         </Alert>
+      ) : null}
+
+      {canManageCustomers && unmatchedCustomers.filter((row) => row.status === "pending").length > 0 ? (
+        <section className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Unmatched Flat Data Customers</h2>
+              <p className="mt-1 text-sm text-amber-800">Review outlet names imported from Flat Data that are not linked to customer master records yet.</p>
+            </div>
+            <span className="rounded-full bg-amber-100 px-3 py-1 text-sm font-semibold text-amber-800">
+              {unmatchedCustomers.filter((row) => row.status === "pending").length} pending
+            </span>
+          </div>
+          <div className="mt-4 grid gap-2">
+            {unmatchedCustomers.filter((row) => row.status === "pending").slice(0, 5).map((row) => (
+              <div key={row.id} className="flex flex-col gap-2 rounded-xl border border-amber-100 bg-white p-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="font-semibold text-slate-900">{row.outletName}</p>
+                  <p className="text-xs text-slate-500">{row.routeName ?? "Route unknown"} / last seen {new Date(row.updatedAt).toLocaleDateString("en-LK")}</p>
+                </div>
+                <div className="flex gap-2">
+                  <button type="button" className="rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white" onClick={() => resolveUnmatched(row.id, "create")}>
+                    Create Customer
+                  </button>
+                  <button type="button" className="rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700" onClick={() => resolveUnmatched(row.id, "ignore")}>
+                    Ignore
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       ) : null}
 
       {error ? (

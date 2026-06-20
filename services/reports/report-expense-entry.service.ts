@@ -28,6 +28,16 @@ type ReportExpenseEntryRow = {
   expense_category_id: string | null;
   custom_expense_name: string | null;
   amount: number;
+  payment_method?: "cash" | "cheque" | "bank" | "credit" | "other";
+  paid_by?: string | null;
+  receipt_file_path?: string | null;
+  receipt_file_name?: string | null;
+  status?: "draft" | "submitted" | "approved" | "rejected" | "void";
+  approved_by?: string | null;
+  approved_at?: string | null;
+  rejected_by?: string | null;
+  rejected_at?: string | null;
+  rejection_reason?: string | null;
   notes: string | null;
   created_at: string;
 };
@@ -45,6 +55,16 @@ const EXPENSE_ENTRY_SELECT = `
   expense_category_id,
   custom_expense_name,
   amount,
+  payment_method,
+  paid_by,
+  receipt_file_path,
+  receipt_file_name,
+  status,
+  approved_by,
+  approved_at,
+  rejected_by,
+  rejected_at,
+  rejection_reason,
   notes,
   created_at
 `.replace(/\s+/g, " ").trim();
@@ -56,6 +76,16 @@ function mapExpenseEntry(row: ReportExpenseEntryRow): DailyReportExpenseEntryDto
     expenseCategoryId: row.expense_category_id,
     customExpenseName: row.custom_expense_name,
     amount: row.amount,
+    paymentMethod: row.payment_method ?? "cash",
+    paidBy: row.paid_by ?? null,
+    receiptFilePath: row.receipt_file_path ?? null,
+    receiptFileName: row.receipt_file_name ?? null,
+    status: row.status ?? "approved",
+    approvedBy: row.approved_by ?? null,
+    approvedAt: row.approved_at ?? null,
+    rejectedBy: row.rejected_by ?? null,
+    rejectedAt: row.rejected_at ?? null,
+    rejectionReason: row.rejection_reason ?? null,
     notes: row.notes,
     createdAt: row.created_at
   };

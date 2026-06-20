@@ -4,10 +4,14 @@ import type {
   DailyReportAuditEventDto,
   DailyReportBaseDto,
   DailyReportCashDenominationDto,
+  CreditInvoiceDto,
   DailyReportExpenseEntryDto,
   DailyReportInventoryEntryDto,
   DailyReportInvoiceEntryDto,
   DailyReportReturnDamageEntryDto,
+  ReportBillDto,
+  ReportCashAdjustmentDto,
+  ReportChequeDto,
   DailyReportSummaryCardsDto
 } from "@/types/domain/report";
 
@@ -20,6 +24,9 @@ import type {
   ExpenseCategoryOption,
   ProductOption,
   ReportExpenseBatchSaveItemInput,
+  ReportBillSaveItemInput,
+  ReportCashAdjustmentSaveItemInput,
+  ReportChequeSaveItemInput,
   ReportInventoryBatchSaveItemInput,
   ReportInvoiceBatchSaveItemInput,
   ReportReturnDamageBatchSaveItemInput,
@@ -193,6 +200,31 @@ export async function fetchExpenseCategoryOptions() {
   return options;
 }
 
+export async function createExpenseCategoryOption(categoryName: string) {
+  const response = await fetch("/api/expense-categories", {
+    method: "POST",
+    credentials: "include",
+    cache: "no-store",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      categoryName,
+      isSystem: false,
+      isActive: true
+    })
+  });
+
+  const item = await readEnvelope<ExpenseCategoriesApiResponse["items"][number]>(response, "Failed to create expense category.");
+
+  return {
+    id: item.id,
+    categoryName: item.category_name,
+    isSystem: item.is_system,
+    isActive: item.is_active
+  } satisfies ExpenseCategoryOption;
+}
+
 export async function fetchProductOptions() {
   const pageSize = 100;
   const options: ProductOption[] = [];
@@ -318,6 +350,141 @@ export async function saveReportExpenseEntries(reportId: string, items: ReportEx
   );
 
   return data.items;
+}
+
+export async function fetchReportCheques(reportId: string) {
+  const response = await fetch(`/api/reports/${reportId}/cheques`, {
+    method: "GET",
+    credentials: "include",
+    cache: "no-store"
+  });
+
+  const data = await readEnvelope<{ items: ReportChequeDto[] }>(response, "Failed to load cheque register.");
+  return data.items;
+}
+
+export async function saveReportCheques(reportId: string, items: ReportChequeSaveItemInput[]) {
+  const response = await fetch(`/api/reports/${reportId}/cheques`, {
+    method: "PUT",
+    credentials: "include",
+    cache: "no-store",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items })
+  });
+
+  const data = await readEnvelope<{ items: ReportChequeDto[] }>(response, "Failed to save cheque register.");
+  return data.items;
+}
+
+export async function fetchReportBills(reportId: string) {
+  const response = await fetch(`/api/reports/${reportId}/bills`, {
+    method: "GET",
+    credentials: "include",
+    cache: "no-store"
+  });
+
+  const data = await readEnvelope<{ items: ReportBillDto[] }>(response, "Failed to load bill ledger.");
+  return data.items;
+}
+
+export async function saveReportBills(reportId: string, items: ReportBillSaveItemInput[]) {
+  const response = await fetch(`/api/reports/${reportId}/bills`, {
+    method: "PUT",
+    credentials: "include",
+    cache: "no-store",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items })
+  });
+
+  const data = await readEnvelope<{ items: ReportBillDto[] }>(response, "Failed to save bill ledger.");
+  return data.items;
+}
+
+export async function approveReportBillException(reportId: string, billId: string) {
+  const response = await fetch(`/api/reports/${reportId}/bills/${billId}/approve`, {
+    method: "PATCH",
+    credentials: "include",
+    cache: "no-store"
+  });
+
+  return readEnvelope<unknown>(response, "Failed to approve bill exception.");
+}
+
+export async function fetchReportCashAdjustments(reportId: string) {
+  const response = await fetch(`/api/reports/${reportId}/cash-adjustments`, {
+    method: "GET",
+    credentials: "include",
+    cache: "no-store"
+  });
+
+  const data = await readEnvelope<{ items: ReportCashAdjustmentDto[] }>(response, "Failed to load cash adjustments.");
+  return data.items;
+}
+
+export async function saveReportCashAdjustments(reportId: string, items: ReportCashAdjustmentSaveItemInput[]) {
+  const response = await fetch(`/api/reports/${reportId}/cash-adjustments`, {
+    method: "PUT",
+    credentials: "include",
+    cache: "no-store",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items })
+  });
+
+  const data = await readEnvelope<{ items: ReportCashAdjustmentDto[] }>(response, "Failed to save cash adjustments.");
+  return data.items;
+}
+
+export async function resolveReportCashAdjustment(reportId: string, adjustmentId: string, status: "approved" | "rejected" | "void") {
+  const response = await fetch(`/api/reports/${reportId}/cash-adjustments/${adjustmentId}`, {
+    method: "PATCH",
+    credentials: "include",
+    cache: "no-store",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status })
+  });
+
+  return readEnvelope<unknown>(response, "Failed to resolve cash adjustment.");
+}
+
+export async function fetchReportCreditInvoices(reportId: string) {
+  const response = await fetch(`/api/reports/${reportId}/credit-invoices`, {
+    method: "GET",
+    credentials: "include",
+    cache: "no-store"
+  });
+
+  const data = await readEnvelope<{ items: CreditInvoiceDto[] }>(response, "Failed to load credit invoices.");
+  return data.items;
+}
+
+export async function postCreditInvoiceCollection(creditInvoiceId: string, payload: {
+  amount: number;
+  paymentMethod: "cash" | "cheque" | "bank" | "other";
+  referenceNo?: string | null;
+  notes?: string | null;
+  collectedAt?: string;
+}) {
+  const response = await fetch(`/api/credit-invoices/${creditInvoiceId}/collections`, {
+    method: "POST",
+    credentials: "include",
+    cache: "no-store",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  return readEnvelope<unknown>(response, "Failed to post credit collection.");
+}
+
+export async function approveReportExpense(reportId: string, expenseId: string, payload: { status: "approved" | "rejected" | "void"; reason?: string }) {
+  const response = await fetch(`/api/reports/${reportId}/expenses/${expenseId}/approve`, {
+    method: "PATCH",
+    credentials: "include",
+    cache: "no-store",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  return readEnvelope<unknown>(response, "Failed to update expense approval.");
 }
 
 export async function fetchReportInventoryEntries(reportId: string) {
@@ -612,8 +779,4 @@ export async function deleteReport(reportId: string) {
 
   return readEnvelope<{ id: string; deleted: boolean }>(response, "Failed to delete report.");
 }
-
-
-
-
 
